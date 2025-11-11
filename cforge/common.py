@@ -1,0 +1,279 @@
+# -*- coding: utf-8 -*-
+"""Location: ./cforge/common.py
+Copyright 2025
+SPDX-License-Identifier: Apache-2.0
+Authors: Gabe Goodhart
+
+Common utilities for Context Forge CLI.
+"""
+
+# Standard
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+import json
+
+# Third-Party
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.syntax import Syntax
+import requests
+import typer
+
+# First-Party
+from cforge.config import get_settings
+
+# ------------------------------------------------------------------------------
+# Error handling
+# ------------------------------------------------------------------------------
+
+
+class CLIError(Exception):
+    """Base class for CLI-related errors."""
+
+
+class AuthenticationError(CLIError):
+    """Raised when authentication fails."""
+
+
+# ------------------------------------------------------------------------------
+# Auth
+# ------------------------------------------------------------------------------
+
+
+def get_token_file() -> Path:
+    """Get the path to the token file in mcpg_home.
+
+    Returns:
+        Path to the token file
+    """
+    token_file = get_settings().mcpg_home / "token"
+    return token_file
+
+
+def save_token(token: str) -> None:
+    """Save authentication token to mcpg_home/token file.
+
+    Args:
+        token: The JWT token to save
+    """
+    token_file = get_token_file()
+    token_file.parent.mkdir(parents=True, exist_ok=True)
+    token_file.write_text(token, encoding="utf-8")
+    # Set restrictive permissions (readable only by owner)
+    token_file.chmod(0o600)
+
+
+def load_token() -> Optional[str]:
+    """Load authentication token from mcpg_home/token file.
+
+    Returns:
+        Token string if found, None otherwise
+    """
+    token_file = get_token_file()
+    if token_file.exists():
+        return token_file.read_text(encoding="utf-8").strip()
+    return None
+
+
+def get_auth_token() -> Optional[str]:
+    """Get authentication token from multiple sources in priority order.
+
+    Priority:
+    1. MCPGATEWAY_BEARER_TOKEN environment variable
+    2. Stored token in mcpg_home/token file
+    3. Basic auth from settings
+
+    Returns:
+        Authentication token string or None if not configured
+    """
+    # Try environment variable first (highest priority)
+    token: Optional[str] = get_settings().mcpgateway_bearer_token
+    if token:
+        return token
+
+    # Try stored token file
+    token = load_token()
+    if token:
+        return token
+
+    return None
+
+
+def make_authenticated_request(
+    method: str,
+    url: str,
+    json_data: Optional[Dict[str, Any]] = None,
+    params: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Make an authenticated HTTP request to the gateway API.
+
+    Args:
+        method: HTTP method (GET, POST, etc.)
+        url: URL path for the request
+        json_data: Optional JSON data for request body
+        params: Optional query parameters
+
+    Returns:
+        JSON response from the API
+
+    Raises:
+        AuthenticationError: If no authentication is configured
+        CLIError: If the API request fails
+    """
+    token = get_auth_token()
+    if not token:
+        raise AuthenticationError("No authentication configured. Set MCPGATEWAY_BEARER_TOKEN environment variable or run cforge login.")
+
+    headers = {"Content-Type": "application/json"}
+    if token.startswith("Basic "):
+        headers["Authorization"] = token
+    else:
+        headers["Authorization"] = f"Bearer {token}"
+
+    gateway_url = f"http://{get_settings().host}:{get_settings().port}"
+    full_url = f"{gateway_url}{url}"
+
+    try:
+        response = requests.request(method=method, url=full_url, json=json_data, params=params, headers=headers)
+
+        if response.status_code >= 400:
+            raise CLIError(f"API request failed ({response.status_code}): {response.text}")
+
+        return response.json()
+
+    except requests.RequestException as e:
+        raise CLIError(f"Failed to connect to gateway at {gateway_url}: {str(e)}")
+
+
+# ------------------------------------------------------------------------------
+# Pretty Printing
+# ------------------------------------------------------------------------------
+
+
+def print_json(console: Console, data: Any, title: Optional[str] = None) -> None:
+    """Pretty print JSON data with Rich.
+
+    Args:
+        console: The current console instance
+        data: Data to print
+        title: Optional title for the output
+    """
+    json_str = json.dumps(data, indent=2, ensure_ascii=False)
+    syntax = Syntax(json_str, "json", theme="monokai", line_numbers=True)
+    if title:
+        console.print(Panel(syntax, title=title, border_style="green"))
+    else:
+        console.print(syntax)
+
+
+def print_table(console: Console, data: List[Dict], title: str, columns: List[str]) -> None:
+    """Print data as a Rich table.
+
+    Args:
+        console: The current console instance
+        data: List of dictionaries to display
+        title: Title for the table
+        columns: List of column names to display
+    """
+    table = Table(title=title, show_header=True, header_style="bold magenta")
+
+    for column in columns:
+        table.add_column(column, style="cyan")
+
+    for item in data:
+        row = [str(item.get(col, "")) for col in columns]
+        table.add_row(*row)
+
+    console.print(table)
+
+
+# ------------------------------------------------------------------------------
+# Structure Guidance
+# ------------------------------------------------------------------------------
+
+
+def prompt_for_schema(console: Console, schema_class: type, prefilled: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Interactively prompt user for fields based on a Pydantic schema.
+
+    Args:
+        console: The current console instance
+        schema_class: The Pydantic model class to use for prompting
+        prefilled: Optional dictionary of pre-filled values to skip prompting for
+
+    Returns:
+        Dictionary with the user's input data (includes prefilled values)
+    """
+    from typing import get_args, get_origin
+
+    console.print(f"\n[bold cyan]Creating {schema_class.__name__}[/bold cyan]")
+    console.print("[dim]Press Enter to skip optional fields[/dim]\n")
+
+    data = prefilled.copy() if prefilled else {}
+    model_fields = schema_class.model_fields
+
+    for field_name, field_info in model_fields.items():
+        # Skip if already provided
+        if field_name in data:
+            console.print(f"[dim]{field_name}: {data[field_name]} (pre-filled)[/dim]")
+            continue
+
+        # Skip internal fields
+        if field_name in ["model_config", "auth_value"]:
+            continue
+
+        # Get field metadata
+        annotation = field_info.annotation
+        description = field_info.description or field_name
+        is_required = field_info.is_required()
+        default = field_info.default if field_info.default is not None else None
+
+        # Get the actual type (handle Optional, Union, etc.)
+        origin = get_origin(annotation)
+        args = get_args(annotation)
+
+        # Determine the base type
+        if origin is Union:
+            # Handle Optional[T] which is Union[T, None]
+            actual_type = args[0] if len(args) > 0 and type(None) in args else annotation
+        else:
+            actual_type = annotation
+
+        # Create prompt text
+        prompt_text = f"{field_name}"
+        if description and description != field_name:
+            prompt_text += f" ({description})"
+        if default and default != "":
+            prompt_text += f" [default: {default}]"
+        if not is_required:
+            prompt_text += " [optional]"
+
+        # Handle different types
+        if actual_type is bool or str(actual_type) == "bool":
+            if is_required or typer.confirm(f"Include {field_name}?", default=False):
+                data[field_name] = typer.confirm(prompt_text, default=bool(default) if default else False)
+
+        elif actual_type is int or str(actual_type) == "int":
+            value = typer.prompt(prompt_text, type=int, default=default if default is not None else "", show_default=default is not None)
+            if value != "":
+                data[field_name] = value
+
+        elif get_origin(actual_type) is list or str(actual_type).startswith("list"):
+            console.print(f"[yellow]{prompt_text}[/yellow]")
+            console.print("[dim]Enter comma-separated values, or press Enter to skip[/dim]")
+            value = typer.prompt("", default="", show_default=False)
+            if value:
+                # Parse comma-separated values
+                data[field_name] = [v.strip() for v in value.split(",") if v.strip()]
+
+        else:  # Treat as string
+            value = typer.prompt(
+                prompt_text,
+                type=str,
+                default=default if default is not None else "",
+                show_default=default is not None and default != "",
+            )
+            if value and value != "":
+                data[field_name] = value
+
+    return data
