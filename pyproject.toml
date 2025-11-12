@@ -52,9 +52,9 @@ dependencies = [
 ]
 
 # ----------------------------------------------------------------
-# Development dependencies (for contributors and maintainers)
+# Optional dependencies (extras)
 # ----------------------------------------------------------------
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     # "autoflake>=2.3.1",
     # "bandit>=1.8.6",
@@ -87,7 +87,7 @@ dev = [
     # "pyspelling>=2.11",
     "pytest>=8.4.2",
     # "pytest-asyncio>=1.2.0",
-    # "pytest-cov>=7.0.0",
+    "pytest-cov>=7.0.0",
     # "pytest-env>=1.1.5",
     # "pytest-examples>=0.0.18",
     # "pytest-httpx>=0.35.0",
