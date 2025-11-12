@@ -1,0 +1,174 @@
+# -*- coding: utf-8 -*-
+"""Location: ./cforge/commands/resources/mcp_servers.py
+Copyright 2025
+SPDX-License-Identifier: Apache-2.0
+Authors: Gabe Goodhart
+
+CLI command group: mcp-servers
+"""
+
+# Standard
+import json
+from pathlib import Path
+from typing import Optional
+
+# Third-Party
+import typer
+
+# First-Party
+from cforge.common import (
+    get_console,
+    make_authenticated_request,
+    print_json,
+    print_table,
+    prompt_for_schema,
+)
+from mcpgateway.schemas import GatewayCreate
+
+
+def mcp_servers_list(
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """List all MCP server peers."""
+    console = get_console()
+
+    try:
+        result = make_authenticated_request("GET", "/gateways")
+
+        if json_output:
+            print_json(result, "MCP Servers")
+        else:
+            gateways = result if isinstance(result, list) else [result]
+            if gateways:
+                print_table(gateways, "MCP Servers", ["id", "name", "url", "description", "is_active"])
+            else:
+                console.print("[yellow]No MCP servers found[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def mcp_servers_get(
+    gateway_id: int = typer.Argument(..., help="Gateway ID"),
+) -> None:
+    """Get details of a specific MCP server."""
+    console = get_console()
+
+    try:
+        result = make_authenticated_request("GET", f"/gateways/{gateway_id}")
+        print_json(result, f"MCP Server {gateway_id}")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def mcp_servers_create(
+    data_file: Optional[Path] = typer.Argument(None, help="JSON file containing gateway data (interactive mode if not provided)"),
+    name: Optional[str] = typer.Option(None, "--name", help="Gateway name"),
+    url: Optional[str] = typer.Option(None, "--url", help="Gateway endpoint URL"),
+    description: Optional[str] = typer.Option(None, "--description", help="Gateway description"),
+) -> None:
+    """Register a new MCP server peer.
+
+    Can be used in three ways:
+    1. Provide a JSON file: cforge mcp-servers create data.json
+    2. Provide partial data via options: cforge mcp-servers create --name myserver --url http://example.com
+    3. Use interactive mode: cforge mcp-servers create
+    """
+    console = get_console()
+
+    try:
+        # Collect prefilled values from options
+        prefilled = {}
+        if name:
+            prefilled["name"] = name
+        if url:
+            prefilled["url"] = url
+        if description:
+            prefilled["description"] = description
+
+        # Determine data source
+        if data_file:
+            # File-based mode
+            if not data_file.exists():
+                console.print(f"[red]File not found: {data_file}[/red]")
+                raise typer.Exit(1)
+
+            data = json.loads(data_file.read_text())
+            # Merge prefilled values (command-line options override file)
+            data.update(prefilled)
+        else:
+            # Interactive mode
+            data = prompt_for_schema(GatewayCreate, prefilled=prefilled if prefilled else None)
+
+        result = make_authenticated_request("POST", "/gateways", json_data=data)
+
+        console.print("[green]✓ MCP server registered successfully![/green]")
+        print_json(result, "Registered MCP Server")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def mcp_servers_update(
+    gateway_id: int = typer.Argument(..., help="Gateway ID"),
+    data_file: Path = typer.Argument(..., help="JSON file containing updated gateway data"),
+) -> None:
+    """Update an existing MCP server."""
+    console = get_console()
+
+    try:
+        if not data_file.exists():
+            console.print(f"[red]File not found: {data_file}[/red]")
+            raise typer.Exit(1)
+
+        data = json.loads(data_file.read_text())
+        result = make_authenticated_request("PUT", f"/gateways/{gateway_id}", json_data=data)
+
+        console.print("[green]✓ MCP server updated successfully![/green]")
+        print_json(result, "Updated MCP Server")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def mcp_servers_delete(
+    gateway_id: int = typer.Argument(..., help="Gateway ID"),
+    confirm: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+) -> None:
+    """Delete an MCP server."""
+    console = get_console()
+
+    try:
+        if not confirm:
+            confirmed = typer.confirm(f"Are you sure you want to delete MCP server {gateway_id}?")
+            if not confirmed:
+                console.print("[yellow]Cancelled[/yellow]")
+                raise typer.Exit(0)
+
+        make_authenticated_request("DELETE", f"/gateways/{gateway_id}")
+        console.print(f"[green]✓ MCP server {gateway_id} deleted successfully![/green]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def mcp_servers_toggle(
+    gateway_id: int = typer.Argument(..., help="Gateway ID"),
+) -> None:
+    """Toggle MCP server active status."""
+    console = get_console()
+
+    try:
+        result = make_authenticated_request("POST", f"/gateways/{gateway_id}/toggle")
+        console.print("[green]✓ MCP server toggled successfully![/green]")
+        print_json(result, "MCP Server Status")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)

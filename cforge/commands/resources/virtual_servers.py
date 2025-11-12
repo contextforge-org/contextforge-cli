@@ -1,0 +1,239 @@
+# -*- coding: utf-8 -*-
+"""Location: ./cforge/commands/resources/virtual_servers.py
+Copyright 2025
+SPDX-License-Identifier: Apache-2.0
+Authors: Gabe Goodhart
+
+CLI command group: virtual-servers
+"""
+
+# Standard
+import json
+from pathlib import Path
+from typing import Optional
+
+# Third-Party
+import typer
+
+# First-Party
+from cforge.common import (
+    get_console,
+    make_authenticated_request,
+    print_json,
+    print_table,
+    prompt_for_schema,
+)
+from mcpgateway.schemas import ServerCreate
+
+
+def virtual_servers_list(
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """List all virtual servers."""
+    console = get_console()
+
+    try:
+        result = make_authenticated_request("GET", "/servers")
+
+        if json_output:
+            print_json(result, "Virtual Servers")
+        else:
+            servers = result if isinstance(result, list) else [result]
+            if servers:
+                print_table(servers, "Virtual Servers", ["id", "name", "description", "is_active"])
+            else:
+                console.print("[yellow]No virtual servers found[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def virtual_servers_get(
+    server_id: int = typer.Argument(..., help="Server ID"),
+) -> None:
+    """Get details of a specific virtual server."""
+    console = get_console()
+
+    try:
+        result = make_authenticated_request("GET", f"/servers/{server_id}")
+        print_json(result, f"Virtual Server {server_id}")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def virtual_servers_create(
+    data_file: Optional[Path] = typer.Argument(None, help="JSON file containing server data (interactive mode if not provided)"),
+    name: Optional[str] = typer.Option(None, "--name", help="Virtual server name"),
+    description: Optional[str] = typer.Option(None, "--description", help="Virtual server description"),
+) -> None:
+    """Create a new virtual server.
+
+    Can be used in three ways:
+    1. Provide a JSON file: cforge virtual-servers create data.json
+    2. Provide partial data via options: cforge virtual-servers create --name myserver --description "My server"
+    3. Use interactive mode: cforge virtual-servers create
+    """
+    console = get_console()
+
+    try:
+        # Collect prefilled values from options
+        prefilled = {}
+        if name:
+            prefilled["name"] = name
+        if description:
+            prefilled["description"] = description
+
+        # Determine data source
+        if data_file:
+            if not data_file.exists():
+                console.print(f"[red]File not found: {data_file}[/red]")
+                raise typer.Exit(1)
+            data = json.loads(data_file.read_text())
+            data.update(prefilled)
+        else:
+            data = prompt_for_schema(ServerCreate, prefilled=prefilled if prefilled else None)
+
+        result = make_authenticated_request("POST", "/servers", json_data=data)
+
+        console.print("[green]✓ Virtual server created successfully![/green]")
+        print_json(result, "Created Virtual Server")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def virtual_servers_update(
+    server_id: int = typer.Argument(..., help="Server ID"),
+    data_file: Path = typer.Argument(..., help="JSON file containing updated server data"),
+) -> None:
+    """Update an existing virtual server."""
+    console = get_console()
+
+    try:
+        if not data_file.exists():
+            console.print(f"[red]File not found: {data_file}[/red]")
+            raise typer.Exit(1)
+
+        data = json.loads(data_file.read_text())
+        result = make_authenticated_request("PUT", f"/servers/{server_id}", json_data=data)
+
+        console.print("[green]✓ Virtual server updated successfully![/green]")
+        print_json(result, "Updated Virtual Server")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def virtual_servers_delete(
+    server_id: int = typer.Argument(..., help="Server ID"),
+    confirm: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+) -> None:
+    """Delete a virtual server."""
+    console = get_console()
+
+    try:
+        if not confirm:
+            confirmed = typer.confirm(f"Are you sure you want to delete virtual server {server_id}?")
+            if not confirmed:
+                console.print("[yellow]Cancelled[/yellow]")
+                raise typer.Exit(0)
+
+        make_authenticated_request("DELETE", f"/servers/{server_id}")
+        console.print(f"[green]✓ Virtual server {server_id} deleted successfully![/green]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def virtual_servers_toggle(
+    server_id: int = typer.Argument(..., help="Server ID"),
+) -> None:
+    """Toggle virtual server active status."""
+    console = get_console()
+
+    try:
+        result = make_authenticated_request("POST", f"/servers/{server_id}/toggle")
+        console.print("[green]✓ Virtual server toggled successfully![/green]")
+        print_json(result, "Virtual Server Status")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def virtual_servers_tools(
+    server_id: int = typer.Argument(..., help="Server ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """List tools available in a virtual server."""
+    console = get_console()
+
+    try:
+        result = make_authenticated_request("GET", f"/servers/{server_id}/tools")
+
+        if json_output:
+            print_json(result, f"Virtual Server {server_id} Tools")
+        else:
+            tools = result if isinstance(result, list) else [result]
+            if tools:
+                print_table(tools, f"Virtual Server {server_id} Tools", ["id", "name", "description"])
+            else:
+                console.print("[yellow]No tools found[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def virtual_servers_resources(
+    server_id: int = typer.Argument(..., help="Server ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """List resources available in a virtual server."""
+    console = get_console()
+
+    try:
+        result = make_authenticated_request("GET", f"/servers/{server_id}/resources")
+
+        if json_output:
+            print_json(result, f"Virtual Server {server_id} Resources")
+        else:
+            resources = result if isinstance(result, list) else [result]
+            if resources:
+                print_table(resources, f"Virtual Server {server_id} Resources", ["id", "name", "uri", "description"])
+            else:
+                console.print("[yellow]No resources found[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def virtual_servers_prompts(
+    server_id: int = typer.Argument(..., help="Server ID"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """List prompts available in a virtual server."""
+    console = get_console()
+
+    try:
+        result = make_authenticated_request("GET", f"/servers/{server_id}/prompts")
+
+        if json_output:
+            print_json(result, f"Virtual Server {server_id} Prompts")
+        else:
+            prompts = result if isinstance(result, list) else [result]
+            if prompts:
+                print_table(prompts, f"Virtual Server {server_id} Prompts", ["id", "name", "description"])
+            else:
+                console.print("[yellow]No prompts found[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        raise typer.Exit(1)
