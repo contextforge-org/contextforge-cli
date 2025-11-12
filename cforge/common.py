@@ -8,6 +8,7 @@ Common utilities for Context Forge CLI.
 """
 
 # Standard
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import json
@@ -22,6 +23,34 @@ import typer
 
 # First-Party
 from cforge.config import get_settings
+
+# ------------------------------------------------------------------------------
+# Singletons
+# ------------------------------------------------------------------------------
+
+
+@lru_cache
+def get_console() -> Console:
+    """Get the console singleton.
+    Returns:
+        Console singleton
+    """
+    return Console()
+
+
+@lru_cache
+def get_app() -> typer.Typer:
+    """Get the typer singleton.
+    Returns:
+        typer singleton
+    """
+    return typer.Typer(
+        name="mcpgateway",
+        help="MCP Gateway - Production-grade MCP Gateway & Proxy CLI",
+        add_completion=True,
+        rich_markup_mode="rich",
+    )
+
 
 # ------------------------------------------------------------------------------
 # Error handling
@@ -151,14 +180,14 @@ def make_authenticated_request(
 # ------------------------------------------------------------------------------
 
 
-def print_json(console: Console, data: Any, title: Optional[str] = None) -> None:
+def print_json(data: Any, title: Optional[str] = None) -> None:
     """Pretty print JSON data with Rich.
 
     Args:
-        console: The current console instance
         data: Data to print
         title: Optional title for the output
     """
+    console = get_console()
     json_str = json.dumps(data, indent=2, ensure_ascii=False)
     syntax = Syntax(json_str, "json", theme="monokai", line_numbers=True)
     if title:
@@ -167,15 +196,15 @@ def print_json(console: Console, data: Any, title: Optional[str] = None) -> None
         console.print(syntax)
 
 
-def print_table(console: Console, data: List[Dict], title: str, columns: List[str]) -> None:
+def print_table(data: List[Dict], title: str, columns: List[str]) -> None:
     """Print data as a Rich table.
 
     Args:
-        console: The current console instance
         data: List of dictionaries to display
         title: Title for the table
         columns: List of column names to display
     """
+    console = get_console()
     table = Table(title=title, show_header=True, header_style="bold magenta")
 
     for column in columns:
@@ -193,11 +222,10 @@ def print_table(console: Console, data: List[Dict], title: str, columns: List[st
 # ------------------------------------------------------------------------------
 
 
-def prompt_for_schema(console: Console, schema_class: type, prefilled: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Interactively prompt user for fields based on a Pydantic schema.
 
     Args:
-        console: The current console instance
         schema_class: The Pydantic model class to use for prompting
         prefilled: Optional dictionary of pre-filled values to skip prompting for
 
@@ -206,6 +234,7 @@ def prompt_for_schema(console: Console, schema_class: type, prefilled: Optional[
     """
     from typing import get_args, get_origin
 
+    console = get_console()
     console.print(f"\n[bold cyan]Creating {schema_class.__name__}[/bold cyan]")
     console.print("[dim]Press Enter to skip optional fields[/dim]\n")
 
