@@ -233,7 +233,7 @@ metrics_app.command("reset")(metrics_reset)
 
 def main() -> None:
     """Entry point for the mcpgateway console script."""
-    app()
+    app()  # pragma: no cover
 
 
 if __name__ == "__main__":
