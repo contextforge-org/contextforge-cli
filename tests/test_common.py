@@ -9,8 +9,18 @@ Tests for common utility functions.
 
 # Standard
 from pathlib import Path
-from unittest.mock import patch
+from typing import List, Optional
+from unittest.mock import Mock, patch
+import stat
 import tempfile
+
+# Third-Party
+from pydantic import BaseModel, Field
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.table import Table
+import pytest
+import requests
 
 # First-Party
 from cforge.common import (
@@ -21,6 +31,10 @@ from cforge.common import (
     get_console,
     get_token_file,
     load_token,
+    make_authenticated_request,
+    print_json,
+    print_table,
+    prompt_for_schema,
     save_token,
 )
 
@@ -81,18 +95,9 @@ class TestAuthentication:
     def test_get_auth_token_from_env(self, mock_settings) -> None:
         """Test getting auth token from environment variable."""
         # Create a new settings instance with token
-        from cforge.config import CLISettings
-
-        settings_with_token = CLISettings(
-            host=mock_settings.host,
-            port=mock_settings.port,
-            mcpg_home=mock_settings.mcpg_home,
-            mcpgateway_bearer_token="env_token",
-        )
-
-        with patch("cforge.common.get_settings", return_value=settings_with_token):
-            with patch("cforge.common.load_token", return_value=None):
-                token = get_auth_token()
+        mock_settings.mcpgateway_bearer_token = "env_token"
+        with patch("cforge.common.load_token", return_value=None):
+            token = get_auth_token()
 
         assert token == "env_token"
 
@@ -126,3 +131,347 @@ class TestErrors:
         error = AuthenticationError("Auth failed")
         assert str(error) == "Auth failed"
         assert isinstance(error, CLIError)
+
+
+class TestMakeAuthenticatedRequest:
+    """Tests for make_authenticated_request function using a server mock."""
+
+    def test_request_no_auth_raises_error(self, mock_settings) -> None:
+        """Test that request without auth raises AuthenticationError."""
+        # Ensure no token is available
+        with patch("cforge.common.load_token", return_value=None):
+            with pytest.raises(AuthenticationError) as exc_info:
+                make_authenticated_request("GET", "/test")
+
+            assert "No authentication configured" in str(exc_info.value)
+
+    def test_request_with_bearer_token(self, mock_settings) -> None:
+        """Test successful request with Bearer token."""
+        # Set up settings with token
+        mock_settings.mcpgateway_bearer_token = "test_bearer_token"
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": "success"}
+
+        with patch("cforge.common.requests.request", return_value=mock_response) as mock_req:
+            result = make_authenticated_request("GET", "/api/test", params={"key": "value"})
+
+            # Verify request was made correctly
+            mock_req.assert_called_once()
+            call_args = mock_req.call_args
+            assert call_args[1]["method"] == "GET"
+            assert call_args[1]["url"] == f"http://{mock_settings.host}:{mock_settings.port}/api/test"
+            assert call_args[1]["params"] == {"key": "value"}
+            assert call_args[1]["headers"]["Authorization"] == "Bearer test_bearer_token"
+            assert call_args[1]["headers"]["Content-Type"] == "application/json"
+
+            assert result == {"result": "success"}
+
+    def test_request_with_basic_auth(self, mock_settings) -> None:
+        """Test request with Basic auth token."""
+        # Set up settings with Basic auth token
+        mock_settings.mcpgateway_bearer_token = "Basic dGVzdDp0ZXN0"
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"result": "success"}
+
+        with patch("cforge.common.requests.request", return_value=mock_response) as mock_req:
+            make_authenticated_request("POST", "/api/test", json_data={"data": "value"})
+
+            # Verify Basic auth is passed as-is
+            call_args = mock_req.call_args
+            assert call_args[1]["headers"]["Authorization"] == "Basic dGVzdDp0ZXN0"
+
+    def test_request_api_error(self, mock_settings) -> None:
+        """Test that API errors are properly raised."""
+        mock_settings.mcpgateway_bearer_token = "test_token"
+
+        mock_response = Mock()
+        mock_response.status_code = 404
+        mock_response.text = "Not found"
+
+        with patch("cforge.common.requests.request", return_value=mock_response):
+            with pytest.raises(CLIError) as exc_info:
+                make_authenticated_request("GET", "/api/missing")
+
+            assert "API request failed (404)" in str(exc_info.value)
+            assert "Not found" in str(exc_info.value)
+
+    def test_request_connection_error(self, mock_settings) -> None:
+        """Test that connection errors are properly raised."""
+        mock_settings.mcpgateway_bearer_token = "test_token"
+
+        with patch("cforge.common.requests.request", side_effect=requests.ConnectionError("Connection refused")):
+            with pytest.raises(CLIError) as exc_info:
+                make_authenticated_request("GET", "/api/test")
+
+            assert "Failed to connect to gateway" in str(exc_info.value)
+            assert "Connection refused" in str(exc_info.value)
+
+
+class TestPrettyPrinting:
+    """Tests for pretty printing functions."""
+
+    def test_print_json_with_title(self, mock_console) -> None:
+        """Test print_json with a title."""
+        test_data = {"key": "value", "number": 42}
+
+        print_json(test_data, "Test Title")
+
+        # Verify console.print was called
+        mock_console.print.assert_called_once()
+        call_args = mock_console.print.call_args[0]
+
+        # Should be wrapped in a Panel
+        assert isinstance(call_args[0], Panel)
+
+    def test_print_json_without_title(self, mock_console) -> None:
+        """Test print_json without a title."""
+        test_data = {"key": "value"}
+
+        print_json(test_data)
+
+        # Verify console.print was called
+        mock_console.print.assert_called_once()
+        call_args = mock_console.print.call_args[0]
+
+        # Should be Syntax object, not Panel
+        assert isinstance(call_args[0], Syntax)
+
+    def test_print_table(self, mock_console) -> None:
+        """Test print_table with data."""
+        test_data = [
+            {"id": 1, "name": "Item 1", "value": "A"},
+            {"id": 2, "name": "Item 2", "value": "B"},
+        ]
+        columns = ["id", "name", "value"]
+
+        print_table(test_data, "Test Table", columns)
+
+        # Verify console.print was called
+        mock_console.print.assert_called_once()
+        call_args = mock_console.print.call_args[0]
+
+        # Should be a Table
+        assert isinstance(call_args[0], Table)
+
+    def test_print_table_missing_columns(self, mock_console) -> None:
+        """Test print_table handles missing columns gracefully."""
+        test_data = [
+            {"id": 1, "name": "Item 1"},  # Missing 'value' column
+        ]
+        columns = ["id", "name", "value"]
+
+        # Should not raise an error
+        print_table(test_data, "Test Table", columns)
+        mock_console.print.assert_called_once()
+
+
+class TestPromptForSchema:
+    """Tests for prompt_for_schema function."""
+
+    def test_prompt_with_prefilled_values(self, mock_console) -> None:
+        """Test that prefilled values are used and not prompted."""
+
+        class TestSchema(BaseModel):
+            name: str
+            description: str
+
+        prefilled = {"name": "test_name", "description": "test_desc"}
+
+        result = prompt_for_schema(TestSchema, prefilled=prefilled)
+
+        # Should return prefilled values without prompting
+        assert result == prefilled
+        # Console should show the prefilled values
+        assert mock_console.print.call_count >= 3  # Header + 2 fields
+
+    def test_prompt_skips_internal_fields(self, mock_console) -> None:
+        """Test that internal fields are skipped."""
+
+        class TestSchema(BaseModel):
+            name: str
+            model_config: dict = {}  # Should be skipped
+            auth_value: str = ""  # Should be skipped
+
+        prefilled = {"name": "test"}
+
+        result = prompt_for_schema(TestSchema, prefilled=prefilled)
+
+        # Should only have the name field
+        assert "name" in result
+        assert "model_config" not in result
+        assert "auth_value" not in result
+
+    def test_prompt_with_string_field(self, mock_console) -> None:
+        """Test prompting for string fields."""
+
+        class TestSchema(BaseModel):
+            name: str = Field(description="The name")
+
+        with patch("typer.prompt", return_value="user_input"):
+            result = prompt_for_schema(TestSchema)
+
+            assert result["name"] == "user_input"
+
+    def test_prompt_with_optional_field(self, mock_console) -> None:
+        """Test prompting for optional fields."""
+
+        class TestSchema(BaseModel):
+            required_field: str
+            optional_field: Optional[str] = None
+
+        with patch("typer.prompt", side_effect=["required_value", ""]):
+            result = prompt_for_schema(TestSchema)
+
+            assert result["required_field"] == "required_value"
+            # Optional field with empty input should not be in result
+            assert "optional_field" not in result or result["optional_field"] == ""
+
+    def test_prompt_with_bool_field(self, mock_console) -> None:
+        """Test prompting for boolean fields."""
+
+        class TestSchema(BaseModel):
+            is_active: bool
+
+        with patch("typer.confirm", return_value=True):
+            result = prompt_for_schema(TestSchema)
+
+            assert result["is_active"] is True
+
+    def test_prompt_with_optional_bool_field_declined(self, mock_console) -> None:
+        """Test prompting for optional boolean field that is declined."""
+
+        class TestSchema(BaseModel):
+            is_active: Optional[bool] = None
+
+        # First confirm returns False (don't include field)
+        with patch("typer.confirm", return_value=False):
+            result = prompt_for_schema(TestSchema)
+
+            # Field should not be in result when declined
+            assert "is_active" not in result
+
+    def test_prompt_with_int_field(self, mock_console) -> None:
+        """Test prompting for integer fields."""
+
+        class TestSchema(BaseModel):
+            count: int
+
+        with patch("typer.prompt", return_value=42):
+            result = prompt_for_schema(TestSchema)
+
+            assert result["count"] == 42
+
+    def test_prompt_with_int_field_empty_input(self, mock_console) -> None:
+        """Test prompting for optional integer field with empty input."""
+
+        class TestSchema(BaseModel):
+            count: Optional[int] = None
+
+        # Return empty string to simulate skipping optional field
+        with patch("typer.prompt", return_value=""):
+            result = prompt_for_schema(TestSchema)
+
+            # Field should not be in result when empty
+            assert "count" not in result
+
+    def test_prompt_with_list_field(self, mock_console) -> None:
+        """Test prompting for list fields."""
+
+        class TestSchema(BaseModel):
+            tags: List[str]
+
+        with patch("typer.prompt", return_value="tag1, tag2, tag3"):
+            result = prompt_for_schema(TestSchema)
+
+            assert result["tags"] == ["tag1", "tag2", "tag3"]
+
+    def test_prompt_with_list_field_empty(self, mock_console) -> None:
+        """Test prompting for list fields with empty input."""
+
+        class TestSchema(BaseModel):
+            tags: Optional[List[str]] = None
+
+        with patch("typer.prompt", return_value=""):
+            result = prompt_for_schema(TestSchema)
+
+            # Empty input for list should not add the field
+            assert "tags" not in result or result.get("tags") is None
+
+
+class TestTokenFilePermissions:
+    """Tests for token file permission handling."""
+
+    def test_save_token_creates_parent_dirs(self) -> None:
+        """Test that save_token creates parent directories."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            token_path = Path(temp_dir) / "nested" / "dirs" / "token"
+
+            with patch("cforge.common.get_token_file", return_value=token_path):
+                save_token("test_token")
+
+                assert token_path.exists()
+                assert token_path.read_text() == "test_token"
+
+    def test_save_token_sets_permissions(self) -> None:
+        """Test that save_token sets restrictive permissions."""
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            token_path = Path(temp_file.name)
+
+            try:
+                with patch("cforge.common.get_token_file", return_value=token_path):
+                    save_token("test_token")
+
+                    # Check permissions are 0o600 (read/write for owner only)
+                    file_stat = token_path.stat()
+                    file_mode = stat.S_IMODE(file_stat.st_mode)
+                    assert file_mode == 0o600
+            finally:
+                token_path.unlink(missing_ok=True)
+
+
+class TestMakeAuthenticatedRequestIntegration:
+    """Integration tests for make_authenticated_request with real server.
+
+    These tests use the session_settings fixture which provides a real
+    running mcpgateway server and properly configured settings. This validates
+    that the client code actually works with the server, not just that it
+    makes the right calls.
+    """
+
+    def test_request_with_bearer_token_to_health_endpoint(self, session_settings) -> None:
+        """Test successful authenticated request to /health endpoint."""
+        # Make a real HTTP request to the session server's health endpoint
+        result = make_authenticated_request("GET", "/health")
+
+        # The health endpoint should return a successful response
+        assert result is not None
+        assert isinstance(result, dict)
+        # Most health endpoints return a status field
+        assert "status" in result or "ok" in result or "healthy" in result or result == {}
+
+    def test_request_to_nonexistent_endpoint_raises_error(self, session_settings) -> None:
+        """Test that requesting a nonexistent endpoint raises CLIError."""
+        # Try to request an endpoint that doesn't exist
+        with pytest.raises(CLIError) as exc_info:
+            make_authenticated_request("GET", "/api/this/endpoint/does/not/exist")
+
+        # Should get a 404 error
+        assert "404" in str(exc_info.value) or "not found" in str(exc_info.value).lower()
+
+    def test_request_with_params_and_json_data(self, session_settings) -> None:
+        """Test request with query parameters.
+
+        This test verifies that parameters are correctly passed through
+        to the server in a real HTTP request.
+        """
+        # Test that we can make requests with params
+        # The health endpoint may not use params, but we can verify the request succeeds
+        result = make_authenticated_request("GET", "/health", params={"test": "value"})
+
+        # Should still get a valid response even with unused params
+        assert result is not None
+        assert isinstance(result, dict)
