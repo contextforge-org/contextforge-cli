@@ -27,7 +27,7 @@ from mcpgateway.schemas import ToolCreate
 
 
 def tools_list(
-    gateway_id: Optional[int] = typer.Option(None, "--gateway-id", help="Filter by gateway ID"),
+    gateway_id: Optional[str] = typer.Option(None, "--gateway-id", help="Filter by gateway ID"),
     active_only: bool = typer.Option(False, "--active-only", help="Show only active tools"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
