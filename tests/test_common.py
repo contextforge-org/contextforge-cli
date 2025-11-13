@@ -37,6 +37,7 @@ from cforge.common import (
     prompt_for_schema,
     save_token,
 )
+from tests.conftest import mock_client_login
 
 
 class TestSingletons:
@@ -65,7 +66,6 @@ class TestTokenManagement:
         token_file = get_token_file()
         assert isinstance(token_file, Path)
         assert str(token_file).endswith("token")
-        # Verify it's in the test mcpg_home directory
         assert token_file.parent == mock_settings.mcpg_home
 
     def test_save_and_load_token(self) -> None:
@@ -136,7 +136,7 @@ class TestErrors:
 class TestMakeAuthenticatedRequest:
     """Tests for make_authenticated_request function using a server mock."""
 
-    def test_request_no_auth_raises_error(self, mock_settings) -> None:
+    def test_request_no_auth_raises_error(self, mock_client) -> None:
         """Test that request without auth raises AuthenticationError."""
         # Ensure no token is available
         with patch("cforge.common.load_token", return_value=None):
@@ -145,28 +145,20 @@ class TestMakeAuthenticatedRequest:
 
             assert "No authentication configured" in str(exc_info.value)
 
-    def test_request_with_bearer_token(self, mock_settings) -> None:
+    def test_request_with_bearer_token(self, mock_client) -> None:
         """Test successful request with Bearer token."""
-        # Set up settings with token
-        mock_settings.mcpgateway_bearer_token = "test_bearer_token"
-
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "success"}
-
-        with patch("cforge.common.requests.request", return_value=mock_response) as mock_req:
-            result = make_authenticated_request("GET", "/api/test", params={"key": "value"})
+        with mock_client_login(mock_client):
+            result = make_authenticated_request("GET", "/tools")
 
             # Verify request was made correctly
+            mock_req = mock_client.request
             mock_req.assert_called_once()
             call_args = mock_req.call_args
             assert call_args[1]["method"] == "GET"
-            assert call_args[1]["url"] == f"http://{mock_settings.host}:{mock_settings.port}/api/test"
-            assert call_args[1]["params"] == {"key": "value"}
-            assert call_args[1]["headers"]["Authorization"] == "Bearer test_bearer_token"
+            assert call_args[1]["url"] == f"http://{mock_client.settings.host}:{mock_client.settings.port}/tools"
+            assert call_args[1]["headers"]["Authorization"] == f"Bearer {mock_client.settings.mcpgateway_bearer_token}"
             assert call_args[1]["headers"]["Content-Type"] == "application/json"
-
-            assert result == {"result": "success"}
+            assert result == []
 
     def test_request_with_basic_auth(self, mock_settings) -> None:
         """Test request with Basic auth token."""
@@ -442,18 +434,27 @@ class TestMakeAuthenticatedRequestIntegration:
     makes the right calls.
     """
 
-    def test_request_with_bearer_token_to_health_endpoint(self, session_settings) -> None:
+    def test_request_with_bearer_token_to_health_endpoint(self, mock_client) -> None:
         """Test successful authenticated request to /health endpoint."""
-        # Make a real HTTP request to the session server's health endpoint
-        result = make_authenticated_request("GET", "/health")
 
-        # The health endpoint should return a successful response
+        # Make a request to the health endpoint (no auth required)
+        make_authenticated_request("GET", "/health")
+
+        # Make a request to an authorized endpoint before login
+        with pytest.raises(CLIError):
+            make_authenticated_request("GET", "/tools")
+
+        # Log in and try again
+        with mock_client_login(mock_client):
+
+            # Make a real HTTP request to the session server's health endpoint
+            result = make_authenticated_request("GET", "/tools")
+
+        # The tools endpoint should return a successful response
         assert result is not None
-        assert isinstance(result, dict)
-        # Most health endpoints return a status field
-        assert "status" in result or "ok" in result or "healthy" in result or result == {}
+        assert isinstance(result, list)
 
-    def test_request_to_nonexistent_endpoint_raises_error(self, session_settings) -> None:
+    def test_request_to_nonexistent_endpoint_raises_error(self, authorized_mock_client) -> None:
         """Test that requesting a nonexistent endpoint raises CLIError."""
         # Try to request an endpoint that doesn't exist
         with pytest.raises(CLIError) as exc_info:
@@ -462,7 +463,7 @@ class TestMakeAuthenticatedRequestIntegration:
         # Should get a 404 error
         assert "404" in str(exc_info.value) or "not found" in str(exc_info.value).lower()
 
-    def test_request_with_params_and_json_data(self, session_settings) -> None:
+    def test_request_with_params_and_json_data(self, authorized_mock_client) -> None:
         """Test request with query parameters.
 
         This test verifies that parameters are correctly passed through
