@@ -11,8 +11,10 @@ Pytest configuration and shared fixtures for Context Forge CLI tests.
 import socket
 import tempfile
 import time
+from contextlib import contextmanager
 from multiprocessing import Process
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Generator
 from unittest.mock import Mock, patch
 
@@ -50,6 +52,64 @@ def get_open_port() -> int:
         s.listen(1)
         port = s.getsockname()[1]
     return port
+
+
+@contextmanager
+def patch_functions(module_path: str, **patches):
+    """Context manager to patch multiple functions in a module.
+
+    This eliminates the need for deeply nested `with patch()` blocks in tests.
+
+    Args:
+        module_path: The module path (e.g., "cforge.commands.resources.prompts")
+        **patches: Keyword arguments where:
+            - key is the function name to patch
+            - value is either:
+                - A dict with patch kwargs (e.g., {"return_value": x, "side_effect": Exception()})
+                - Any other value to use as return_value
+                - An empty dict {} to create a mock without specific configuration
+
+    Yields:
+        SimpleNamespace with attributes for each patched function's mock
+
+    Example:
+        with patch_functions("cforge.commands.resources.prompts",
+                           get_console=mock_console,
+                           make_authenticated_request={"return_value": mock_data},
+                           print_table={}) as mocks:
+            prompts_list(gateway_id=None, json_output=False)
+            mocks.print_table.assert_called_once()
+
+    Example with side_effect:
+        with patch_functions("cforge.commands.resources.prompts",
+                           get_console=mock_console,
+                           make_authenticated_request={"side_effect": Exception("API error")}) as mocks:
+            with pytest.raises(typer.Exit):
+                prompts_list(gateway_id=None, json_output=False)
+    """
+    patch_contexts = []
+    mocks = SimpleNamespace()
+
+    try:
+        for func_name, config in patches.items():
+            full_path = f"{module_path}.{func_name}"
+
+            # If config is a dict, use it as patch kwargs
+            # Otherwise, use it as return_value
+            if config is None or isinstance(config, dict):
+                patch_kwargs = config or {}
+            else:
+                patch_kwargs = {"return_value": config}
+
+            patch_obj = patch(full_path, **patch_kwargs)
+            mock = patch_obj.__enter__()
+            patch_contexts.append(patch_obj)
+            setattr(mocks, func_name, mock)
+
+        yield mocks
+    finally:
+        for patch_ctx in reversed(patch_contexts):
+            patch_ctx.__exit__(None, None, None)
 
 
 # ==============================================================================

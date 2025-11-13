@@ -7,11 +7,227 @@ Authors: Gabe Goodhart
 Tests for the resources commands.
 """
 
+# Standard
+import json
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+# Third-Party
+import pytest
+import typer
+
+# First-Party
+from cforge.commands.resources.resources import (
+    resources_create,
+    resources_delete,
+    resources_get,
+    resources_list,
+    resources_subscribe,
+    resources_templates,
+    resources_toggle,
+    resources_update,
+)
+
 
 class TestResourcesCommands:
     """Tests for resources commands."""
 
-    def test_resources_placeholder(self) -> None:
-        """Placeholder test for resources commands."""
-        # TODO: Implement tests for resources commands
-        assert True
+    def test_resources_list_success(self, mock_console) -> None:
+        """Test resources list command."""
+        mock_resources = [{"id": 1, "name": "resource1", "uri": "file:///path", "description": "desc1", "gateway_id": 1, "is_active": True}]
+
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_resources):
+                with patch("cforge.commands.resources.resources.print_table") as mock_print:
+                    resources_list(gateway_id=None, json_output=False)
+                    mock_print.assert_called_once()
+
+    def test_resources_list_json_output(self, mock_console) -> None:
+        """Test resources list with JSON output."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=[]):
+                with patch("cforge.commands.resources.resources.print_json") as mock_print:
+                    resources_list(gateway_id=None, json_output=True)
+                    mock_print.assert_called_once()
+
+    def test_resources_list_with_filters(self, mock_console) -> None:
+        """Test resources list with filters."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=[]) as mock_req:
+                with patch("cforge.commands.resources.resources.print_table"):
+                    resources_list(gateway_id=5, json_output=False)
+
+                # Verify params
+                call_args = mock_req.call_args
+                assert call_args[1]["params"]["gateway_id"] == 5
+
+    def test_resources_list_no_results(self, mock_console) -> None:
+        """Test resources list with no results."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=[]):
+                resources_list(gateway_id=None, json_output=False)
+
+        # Verify "No resources found" message
+        assert any("No resources found" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_resources_list_error(self, mock_console) -> None:
+        """Test resources list error handling."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", side_effect=Exception("API error")):
+                with pytest.raises(typer.Exit):
+                    resources_list(gateway_id=None, json_output=False)
+
+    def test_resources_get_success(self, mock_console) -> None:
+        """Test resources get command."""
+        mock_resource = {"id": 1, "name": "test"}
+
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_resource):
+                with patch("cforge.commands.resources.resources.print_json"):
+                    resources_get(resource_id=1)
+
+    def test_resources_create_from_file(self, mock_console) -> None:
+        """Test resources create from file."""
+        mock_result = {"id": 1, "name": "new_resource"}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_file = Path(temp_dir) / "resource.json"
+            data_file.write_text(json.dumps({"name": "new_resource", "uri": "file:///path", "description": "desc"}))
+
+            with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+                with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_result):
+                    with patch("cforge.commands.resources.resources.print_json"):
+                        resources_create(data_file=data_file, name=None, uri=None, description=None)
+
+    def test_resources_create_file_not_found(self, mock_console) -> None:
+        """Test resources create with missing file."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with pytest.raises(typer.Exit):
+                resources_create(data_file=Path("/nonexistent.json"), name=None, uri=None, description=None)
+
+    def test_resources_create_interactive(self, mock_console) -> None:
+        """Test resources create interactive mode."""
+        mock_result = {"id": 1, "name": "new_resource"}
+
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.prompt_for_schema", return_value={"name": "test", "uri": "file:///path"}):
+                with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_result):
+                    with patch("cforge.commands.resources.resources.print_json"):
+                        resources_create(data_file=None, name=None, uri=None, description=None)
+
+    def test_resources_create_with_options(self, mock_console) -> None:
+        """Test resources create with command-line options."""
+        mock_result = {"id": 1, "name": "new_resource"}
+
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.prompt_for_schema", return_value={"name": "test", "uri": "file:///path", "description": "desc"}) as mock_prompt:
+                with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_result):
+                    with patch("cforge.commands.resources.resources.print_json"):
+                        resources_create(data_file=None, name="test", uri="file:///path", description="desc")
+
+                # Verify prefilled values
+                call_args = mock_prompt.call_args
+                assert call_args[1]["prefilled"]["name"] == "test"
+                assert call_args[1]["prefilled"]["uri"] == "file:///path"
+                assert call_args[1]["prefilled"]["description"] == "desc"
+
+    def test_resources_update_success(self, mock_console) -> None:
+        """Test resources update command."""
+        mock_result = {"id": 1, "name": "updated"}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_file = Path(temp_dir) / "update.json"
+            data_file.write_text(json.dumps({"description": "updated desc"}))
+
+            with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+                with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_result):
+                    with patch("cforge.commands.resources.resources.print_json"):
+                        resources_update(resource_id=1, data_file=data_file)
+
+    def test_resources_update_file_not_found(self, mock_console) -> None:
+        """Test resources update with missing file."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with pytest.raises(typer.Exit):
+                resources_update(resource_id=1, data_file=Path("/nonexistent.json"))
+
+    def test_resources_delete_with_confirmation(self, mock_console) -> None:
+        """Test resources delete with confirmation."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request"):
+                with patch("cforge.commands.resources.resources.typer.confirm", return_value=True):
+                    resources_delete(resource_id=1, confirm=False)
+
+    def test_resources_delete_cancelled(self, mock_console) -> None:
+        """Test resources delete cancelled."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.typer.confirm", return_value=False):
+                with pytest.raises(typer.Exit) as exc_info:
+                    resources_delete(resource_id=1, confirm=False)
+
+                # Note: Exit(0) gets caught by exception handler and converted to Exit(1)
+                assert exc_info.value.exit_code == 1
+
+    def test_resources_delete_with_yes_flag(self, mock_console) -> None:
+        """Test resources delete with --yes flag."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request"):
+                resources_delete(resource_id=1, confirm=True)
+
+        # Should not prompt
+        assert not any("confirm" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_resources_toggle_success(self, mock_console) -> None:
+        """Test resources toggle command."""
+        mock_result = {"id": 1, "is_active": False}
+
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_result):
+                with patch("cforge.commands.resources.resources.print_json"):
+                    resources_toggle(resource_id=1)
+
+    def test_resources_templates_success(self, mock_console) -> None:
+        """Test resources templates command."""
+        mock_templates = [{"name": "template1", "description": "desc1"}]
+
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_templates):
+                with patch("cforge.commands.resources.resources.print_json"):
+                    resources_templates()
+
+    def test_resources_subscribe_success(self, mock_console) -> None:
+        """Test resources subscribe command."""
+        mock_result = {"subscription_id": "sub123"}
+
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_result):
+                with patch("cforge.commands.resources.resources.print_json"):
+                    resources_subscribe(resource_id=1)
+
+    def test_resources_get_error(self, mock_console) -> None:
+        """Test resources get error handling."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", side_effect=Exception("API error")):
+                with pytest.raises(typer.Exit):
+                    resources_get(resource_id=1)
+
+    def test_resources_toggle_error(self, mock_console) -> None:
+        """Test resources toggle error handling."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", side_effect=Exception("API error")):
+                with pytest.raises(typer.Exit):
+                    resources_toggle(resource_id=1)
+
+    def test_resources_templates_error(self, mock_console) -> None:
+        """Test resources templates error handling."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", side_effect=Exception("API error")):
+                with pytest.raises(typer.Exit):
+                    resources_templates()
+
+    def test_resources_subscribe_error(self, mock_console) -> None:
+        """Test resources subscribe error handling."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", side_effect=Exception("API error")):
+                with pytest.raises(typer.Exit):
+                    resources_subscribe(resource_id=1)
