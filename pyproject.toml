@@ -383,6 +383,7 @@ filterwarnings = [
   "error", # Turn ALL warnings into errors by default
   "ignore:Passing 'msg' argument to .*\\.cancel\\(\\) is deprecated:DeprecationWarning", # From 3rd party libraries
   "ignore: Using `@model_validator` with mode='after' on a classmethod.*:DeprecationWarning", # From 3rd party libraries
+  "ignore: Unclosed <MemoryObjectReceiveStream.*:ResourceWarning", # From async client calls
 ]
 
 # ── fawltydeps ─────────────────────────────────────────────────────
