@@ -27,7 +27,7 @@ from mcpgateway.schemas import ResourceCreate
 
 
 def resources_list(
-    gateway_id: Optional[str] = typer.Option(None, "--gateway-id", help="Filter by gateway ID"),
+    gateway_id: Optional[str] = typer.Option(None, "--mcp-server-id", "-m", help="Filter by MCP Server ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List all resources in the gateway."""
