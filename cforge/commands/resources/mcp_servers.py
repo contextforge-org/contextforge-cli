@@ -40,7 +40,7 @@ def mcp_servers_list(
         else:
             gateways = result if isinstance(result, list) else [result]
             if gateways:
-                print_table(gateways, "MCP Servers", ["id", "name", "url", "description", "is_active"])
+                print_table(gateways, "MCP Servers", ["id", "name", "url", "description", "enabled"])
             else:
                 console.print("[yellow]No MCP servers found[/yellow]")
 
@@ -50,14 +50,14 @@ def mcp_servers_list(
 
 
 def mcp_servers_get(
-    gateway_id: int = typer.Argument(..., help="Gateway ID"),
+    mcp_server_id: str = typer.Argument(..., help="MCP Server ID"),
 ) -> None:
     """Get details of a specific MCP server."""
     console = get_console()
 
     try:
-        result = make_authenticated_request("GET", f"/gateways/{gateway_id}")
-        print_json(result, f"MCP Server {gateway_id}")
+        result = make_authenticated_request("GET", f"/gateways/{mcp_server_id}")
+        print_json(result, f"MCP Server {mcp_server_id}")
 
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")
@@ -114,7 +114,7 @@ def mcp_servers_create(
 
 
 def mcp_servers_update(
-    gateway_id: int = typer.Argument(..., help="Gateway ID"),
+    mcp_server_id: str = typer.Argument(..., help="MCP Server ID"),
     data_file: Path = typer.Argument(..., help="JSON file containing updated gateway data"),
 ) -> None:
     """Update an existing MCP server."""
@@ -126,7 +126,7 @@ def mcp_servers_update(
             raise typer.Exit(1)
 
         data = json.loads(data_file.read_text())
-        result = make_authenticated_request("PUT", f"/gateways/{gateway_id}", json_data=data)
+        result = make_authenticated_request("PUT", f"/gateways/{mcp_server_id}", json_data=data)
 
         console.print("[green]✓ MCP server updated successfully![/green]")
         print_json(result, "Updated MCP Server")
@@ -137,7 +137,7 @@ def mcp_servers_update(
 
 
 def mcp_servers_delete(
-    gateway_id: int = typer.Argument(..., help="Gateway ID"),
+    mcp_server_id: str = typer.Argument(..., help="MCP Server ID"),
     confirm: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ) -> None:
     """Delete an MCP server."""
@@ -145,13 +145,13 @@ def mcp_servers_delete(
 
     try:
         if not confirm:
-            confirmed = typer.confirm(f"Are you sure you want to delete MCP server {gateway_id}?")
+            confirmed = typer.confirm(f"Are you sure you want to delete MCP server {mcp_server_id}?")
             if not confirmed:
                 console.print("[yellow]Cancelled[/yellow]")
                 raise typer.Exit(0)
 
-        make_authenticated_request("DELETE", f"/gateways/{gateway_id}")
-        console.print(f"[green]✓ MCP server {gateway_id} deleted successfully![/green]")
+        make_authenticated_request("DELETE", f"/gateways/{mcp_server_id}")
+        console.print(f"[green]✓ MCP server {mcp_server_id} deleted successfully![/green]")
 
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")
@@ -159,13 +159,21 @@ def mcp_servers_delete(
 
 
 def mcp_servers_toggle(
-    gateway_id: int = typer.Argument(..., help="Gateway ID"),
+    mcp_server_id: str = typer.Argument(..., help="MCP Server ID"),
 ) -> None:
     """Toggle MCP server active status."""
     console = get_console()
 
     try:
-        result = make_authenticated_request("POST", f"/gateways/{gateway_id}/toggle")
+        current_status = make_authenticated_request("GET", f"/gateways/{mcp_server_id}")
+        assert isinstance(current_status, dict)
+        if current_status["enabled"]:
+            activate = False
+        else:
+            activate = True
+        result = make_authenticated_request("POST", f"/gateways/{mcp_server_id}/toggle", params={"activate": activate})
+        assert isinstance(result, dict)
+        assert result["gateway"]["enabled"] == activate, "Failed to toggle MCP server"
         console.print("[green]✓ MCP server toggled successfully![/green]")
         print_json(result, "MCP Server Status")
 
