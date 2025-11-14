@@ -134,7 +134,7 @@ def make_authenticated_request(
     url: str,
     json_data: Optional[Dict[str, Any]] = None,
     params: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+) -> Union[Dict[str, Any], List[Any]]:
     """Make an authenticated HTTP request to the gateway API.
 
     Args:
