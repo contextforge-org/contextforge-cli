@@ -8,26 +8,58 @@ Pytest configuration and shared fixtures for Context Forge CLI tests.
 """
 
 # Standard
+import logging
+import os
+import socket
 import sys
 import tempfile
+import time
+import threading
+import urllib3
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Generator, List
+from typing import Any, Callable, Generator, List
 from unittest.mock import Mock, patch
 
 # Third-Party
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
+from mcp.server.fastmcp import FastMCP
 from typer.testing import CliRunner
 
-# First-Party
-from cforge.config import CLISettings, get_settings
 
+# Before importing anything from the core, force the database to use a temp dir
+# NOTE: In memory results in missing table errors
+working_dir = tempfile.TemporaryDirectory()
+os.environ["DATABASE_URL"] = f"sqlite:////{working_dir.__enter__()}/mcp.db"
+
+
+# First-Party
+from cforge.config import CLISettings, get_settings  # noqa: E402
+
+
+# Suppress urllib3 retry warnings during tests
+logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
 
 # ==============================================================================
 # Helper Functions
 # ==============================================================================
+
+
+@contextmanager
+def patch_everywhere(name: str, **kwargs) -> Generator[List[Any], None, None]:
+    """Patch a function in every place it is imported."""
+    # Find all modules that have the function
+    mod_names = [m for m, mod in sys.modules.items() if m.startswith("cforge") and hasattr(mod, name)]
+    patches = [patch(f"{m}.{name}", **kwargs) for m in mod_names]
+    yields = [p.__enter__() for p in patches]
+    try:
+        yield yields
+    finally:
+        for p in patches:
+            p.__exit__(None, None, None)
 
 
 @contextmanager
@@ -88,6 +120,73 @@ def patch_functions(module_path: str, **patches):
             patch_ctx.__exit__(None, None, None)
 
 
+def get_open_port() -> int:
+    """Find an available ephemeral port.
+
+    This function binds to port 0, which tells the OS to assign an
+    available ephemeral port. We then immediately close the socket
+    and return that port number.
+
+    Note: There's a small race condition where another process could
+    grab this port before we use it, but this is generally acceptable
+    for testing.
+
+    Returns:
+        An available port number
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        s.listen(1)
+        port = s.getsockname()[1]
+    return port
+
+
+@contextmanager
+def mock_client_login(mock_client: TestClient) -> Generator[None, None, None]:
+    """Provide a context manager for logging into a FastAPI TestClient."""
+    cfg = get_settings()
+    current_token = cfg.mcpgateway_bearer_token
+    resp = mock_client.post("/auth/login", json={"email": cfg.platform_admin_email, "password": cfg.basic_auth_password})
+    cfg.mcpgateway_bearer_token = resp.json()["access_token"]
+    setattr(mock_client, "settings", cfg)
+    try:
+        yield
+    finally:
+        cfg.mcpgateway_bearer_token = current_token
+        get_settings.cache_clear()
+
+
+@contextmanager
+def mock_mcp_server_sse(*tools: List[Callable]) -> Generator[uvicorn.Config, None, None]:
+    """Manage the context for an ephemeral MCP server with SSE."""
+    mcp = FastMCP("Test")
+    for tool in tools:
+        mcp.tool()(tool)
+    port = get_open_port()
+    config = uvicorn.Config(mcp.sse_app(), host="localhost", port=port, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run)
+    try:
+        thread.start()
+        max_wait = 1
+        start_time = time.time()
+        while time.time() - start_time < max_wait:
+            # Query a fake endpoint and if you get _any_ response (even a 404), it's up
+            try:
+                urllib3.request("GET", f"http://localhost:{port}/poke", timeout=0.05)
+            except Exception:
+                time.sleep(0.1)
+            else:
+                break
+        else:
+            raise RuntimeError("Failed to start MCP server")
+
+        yield config
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
+
+
 # ==============================================================================
 # CLI Testing Fixtures
 # ==============================================================================
@@ -110,8 +209,9 @@ def mock_console() -> Generator[Mock, None, None]:
     Yields:
         Mock console object
     """
-    with patch("cforge.common.get_console") as mock:
-        yield mock.return_value
+    console_mock = Mock()
+    with patch_everywhere("get_console", return_value=console_mock):
+        yield console_mock
 
 
 @pytest.fixture(scope="session")
@@ -139,40 +239,11 @@ def mock_client() -> Generator[TestClient, None, None]:
         yield mock_client
 
 
-@contextmanager
-def mock_client_login(mock_client: TestClient) -> Generator[None, None, None]:
-    """Provide a context manager for logging into a FastAPI TestClient."""
-    cfg = get_settings()
-    current_token = cfg.mcpgateway_bearer_token
-    resp = mock_client.post("/auth/login", json={"email": cfg.platform_admin_email, "password": cfg.basic_auth_password})
-    cfg.mcpgateway_bearer_token = resp.json()["access_token"]
-    setattr(mock_client, "settings", cfg)
-    try:
-        yield
-    finally:
-        cfg.mcpgateway_bearer_token = current_token
-        get_settings.cache_clear()
-
-
 @pytest.fixture
 def authorized_mock_client(mock_client) -> Generator[None, None, None]:
     """Provide a fixture for a FastAPI TestClient with an authorized user."""
-    with mock_client_login(mock_client) as client:
-        yield client
-
-
-@contextmanager
-def patch_everywhere(name: str, **kwargs) -> Generator[List[None], None, None]:
-    """Patch a function in every place it is imported."""
-    # Find all modules that have the function
-    mod_names = [m for m, mod in sys.modules.items() if m.startswith("cforge") and hasattr(mod, name)]
-    patches = [patch(f"{m}.{name}", **kwargs) for m in mod_names]
-    yields = [p.__enter__() for p in patches]
-    try:
-        yield yields
-    finally:
-        for p in patches:
-            p.__exit__(None, None, None)
+    with mock_client_login(mock_client):
+        yield mock_client
 
 
 @pytest.fixture
@@ -182,3 +253,21 @@ def mock_settings() -> Generator[CLISettings, None, None]:
         settings = CLISettings(mcpg_home=Path(tmpdir))
         with patch_everywhere("get_settings", return_value=settings):
             yield settings
+
+
+@pytest.fixture(scope="session")
+def mock_mcp_server() -> Generator[dict, None, None]:
+    """Fixture for a running mock MCP server with several tools."""
+
+    def hi(name: str) -> str:
+        return f"Hello, {name}!"
+
+    def add(a: int, b: int) -> int:
+        return a + b
+
+    with mock_mcp_server_sse(hi, add) as server_cfg:
+        yield {
+            "url": f"http://localhost:{server_cfg.port}/sse",
+            "name": "test-server",
+            "description": "A server for testing",
+        }
