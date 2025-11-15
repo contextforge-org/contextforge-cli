@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 # Third-Party
+import click
 import pytest
 import typer
 
@@ -220,3 +221,33 @@ class TestPromptsCommandsIntegration:
                 mocks.print_json.assert_called_once()
                 body = mocks.print_json.call_args[0][0]
                 assert isinstance(body, dict)
+
+    def test_prompts_lifecycle(self, mock_console, authorized_mock_client) -> None:
+        """Test the lifecycle of prompts created via the API not a server"""
+        with patch_functions(
+            "cforge.commands.resources.prompts",
+            get_console=mock_console,
+            print_json=None,
+            prompt_for_schema={"return_value": {"name": "foo", "template": "Hi there", "description": "greeting"}},
+        ) as mocks:
+            # Create the prompt
+            prompts_create(data_file=None)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            prompt_id = body["id"]
+            mocks.print_json.reset_mock()
+
+            # Get the prompt by id
+            prompts_get(prompt_id)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            assert body["description"] == "greeting"
+            mocks.print_json.reset_mock()
+
+            # Delete the prompt
+            prompts_delete(prompt_id)
+            mocks.print_json.reset_mock()
+
+            # Make sure it's gone
+            with pytest.raises(click.exceptions.Exit):
+                prompts_get(prompt_id)
