@@ -101,7 +101,7 @@ def prompts_create(
         else:
             data = prompt_for_schema(PromptCreate, prefilled=prefilled if prefilled else None)
 
-        result = make_authenticated_request("POST", "/prompts", json_data=data)
+        result = make_authenticated_request("POST", "/prompts", json_data={"prompt": data})
 
         console.print("[green]✓ Prompt created successfully![/green]")
         print_json(result, "Created Prompt")
