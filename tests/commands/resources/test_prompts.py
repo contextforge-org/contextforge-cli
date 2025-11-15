@@ -35,7 +35,7 @@ class TestPromptsCommands:
 
     def test_prompts_list_success(self, mock_console) -> None:
         """Test prompts list command."""
-        mock_prompts = [{"id": 1, "name": "prompt1", "description": "desc1", "gateway_id": 1, "is_active": True}]
+        mock_prompts = [{"id": 1, "name": "prompt1", "description": "desc1", "gateway_id": 1, "enabled": True}]
 
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_prompts, print_table=None) as mocks:
             prompts_list(gateway_id=None, json_output=False)
@@ -158,7 +158,7 @@ class TestPromptsCommands:
 
     def test_prompts_toggle_success(self, mock_console) -> None:
         """Test prompts toggle command."""
-        mock_result = {"id": 1, "is_active": False}
+        mock_result = {"id": 1, "enabled": False}
 
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_result, print_json=None):
             prompts_toggle(prompt_id=1)
@@ -202,3 +202,21 @@ class TestPromptsCommands:
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request={"side_effect": Exception("API error")}):
             with pytest.raises(typer.Exit):
                 prompts_toggle(prompt_id=1)
+
+
+class TestPromptsCommandsIntegration:
+    """Test prompts commands with a real gateway test client."""
+
+    def test_prompts_list_get(self, mock_console, registered_mcp_server) -> None:
+        """Test listing and getting prompts from a registered MCP server"""
+        with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, print_json=None) as mocks:
+            prompts_list(json_output=True)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            assert isinstance(body, list) and len(body) == 2
+            for prompt in body:
+                mocks.print_json.reset_mock()
+                prompts_get(prompt["id"])
+                mocks.print_json.assert_called_once()
+                body = mocks.print_json.call_args[0][0]
+                assert isinstance(body, dict)

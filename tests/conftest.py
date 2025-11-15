@@ -157,11 +157,17 @@ def mock_client_login(mock_client: TestClient) -> Generator[None, None, None]:
 
 
 @contextmanager
-def mock_mcp_server_sse(*tools: List[Callable]) -> Generator[uvicorn.Config, None, None]:
+def mock_mcp_server_sse(tools: List[Callable], prompts: List[str], resources: List[str]) -> Generator[uvicorn.Config, None, None]:
     """Manage the context for an ephemeral MCP server with SSE."""
     mcp = FastMCP("Test")
+
     for tool in tools:
         mcp.tool()(tool)
+    for prompt in prompts:
+        mcp.prompt(name=prompt[:5])(lambda: prompt)
+    for resource in resources:
+        mcp.resource(f"raw://{resource[:5]}", name=resource.split()[0])(lambda: resource)
+
     port = get_open_port()
     config = uvicorn.Config(mcp.sse_app(), host="localhost", port=port, log_level="error")
     server = uvicorn.Server(config)
@@ -265,9 +271,29 @@ def mock_mcp_server() -> Generator[dict, None, None]:
     def add(a: int, b: int) -> int:
         return a + b
 
-    with mock_mcp_server_sse(hi, add) as server_cfg:
+    with mock_mcp_server_sse(
+        tools=[hi, add],
+        prompts=["Hello world!", "You are a math machine"],
+        resources=["addition: 1 + 1 = 2"],
+    ) as server_cfg:
         yield {
             "url": f"http://localhost:{server_cfg.port}/sse",
             "name": "test-server",
             "description": "A server for testing",
         }
+
+
+@pytest.fixture
+def registered_mcp_server(mock_mcp_server, authorized_mock_client) -> Generator[dict, None, None]:
+    """Test-level fixture to register the mock server and unregister at the end"""
+    result = authorized_mock_client.post(
+        "/gateways",
+        json=mock_mcp_server,
+        headers={"Authorization": f"Bearer {authorized_mock_client.settings.mcpgateway_bearer_token}"},
+    )
+    body = result.json()
+    mcp_server_id = body["id"]
+    try:
+        yield body
+    finally:
+        authorized_mock_client.delete(f"/gateways/{mcp_server_id}")
