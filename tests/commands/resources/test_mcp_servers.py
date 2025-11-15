@@ -215,6 +215,13 @@ class TestMcpServersCommandsIntegration:
             assert not mcp_server_body["enabled"]
             mocks.print_json.reset_mock()
 
+            # Re-activate it
+            mcp_servers_toggle(mcp_server_id)
+            assert len(mocks.print_json.call_args_list) == 1
+            mcp_server_body = mocks.print_json.call_args[0][0]["gateway"]
+            assert mcp_server_body["enabled"]
+            mocks.print_json.reset_mock()
+
             # Delete it
             mcp_servers_delete(mcp_server_id)
 
