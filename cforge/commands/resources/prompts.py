@@ -23,7 +23,7 @@ from cforge.common import (
     print_table,
     prompt_for_schema,
 )
-from mcpgateway.schemas import PromptCreate
+from mcpgateway.schemas import PromptCreate, PromptUpdate
 
 
 def prompts_list(
@@ -118,17 +118,20 @@ def prompts_create(
 
 def prompts_update(
     prompt_id: int = typer.Argument(..., help="Prompt ID"),
-    data_file: Path = typer.Argument(..., help="JSON file containing updated prompt data"),
+    data_file: Optional[Path] = typer.Argument(None, help="JSON file containing updated prompt data (interactive mode if not provided)"),
 ) -> None:
     """Update an existing prompt."""
     console = get_console()
 
     try:
-        if not data_file.exists():
-            console.print(f"[red]File not found: {data_file}[/red]")
-            raise typer.Exit(1)
+        if data_file:
+            if not data_file.exists():
+                console.print(f"[red]File not found: {data_file}[/red]")
+                raise typer.Exit(1)
+            data = json.loads(data_file.read_text())
+        else:
+            data = prompt_for_schema(PromptUpdate)
 
-        data = json.loads(data_file.read_text())
         result = make_authenticated_request("PUT", f"/prompts/{prompt_id}", json_data=data)
 
         console.print("[green]✓ Prompt updated successfully![/green]")
