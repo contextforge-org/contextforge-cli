@@ -39,28 +39,28 @@ class TestPromptsCommands:
         mock_prompts = [{"id": 1, "name": "prompt1", "description": "desc1", "gateway_id": 1, "enabled": True}]
 
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_prompts, print_table=None) as mocks:
-            prompts_list(gateway_id=None, json_output=False)
+            prompts_list(mcp_server_id=None, json_output=False)
             mocks.print_table.assert_called_once()
 
     def test_prompts_list_json_output(self, mock_console) -> None:
         """Test prompts list with JSON output."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=[], print_json=None) as mocks:
-            prompts_list(gateway_id=None, json_output=True)
+            prompts_list(mcp_server_id=None, json_output=True)
             mocks.print_json.assert_called_once()
 
     def test_prompts_list_with_filters(self, mock_console) -> None:
         """Test prompts list with filters."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=[], print_table=None) as mocks:
-            prompts_list(gateway_id=5, json_output=False)
+            prompts_list(mcp_server_id="5", json_output=False)
 
             # Verify params
             call_args = mocks.make_authenticated_request.call_args
-            assert call_args[1]["params"]["gateway_id"] == 5
+            assert call_args[1]["params"]["gateway_id"] == "5"
 
     def test_prompts_list_no_results(self, mock_console) -> None:
         """Test prompts list with no results."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=[]):
-            prompts_list(gateway_id=None, json_output=False)
+            prompts_list(mcp_server_id=None, json_output=False)
 
         # Verify "No prompts found" message
         assert any("No prompts found" in str(call) for call in mock_console.print.call_args_list)
@@ -69,7 +69,7 @@ class TestPromptsCommands:
         """Test prompts list error handling."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request={"side_effect": Exception("API error")}):
             with pytest.raises(typer.Exit):
-                prompts_list(gateway_id=None, json_output=False)
+                prompts_list(mcp_server_id=None, json_output=False)
 
     def test_prompts_get_success(self, mock_console) -> None:
         """Test prompts get command."""

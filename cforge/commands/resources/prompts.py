@@ -27,7 +27,7 @@ from mcpgateway.schemas import PromptCreate
 
 
 def prompts_list(
-    gateway_id: Optional[str] = typer.Option(None, "--mcp-server-id", "-m", help="Filter by MCP Server ID"),
+    mcp_server_id: Optional[str] = typer.Option(None, "--mcp-server-id", "-m", help="Filter by MCP Server ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List all prompts in the gateway."""
@@ -35,8 +35,8 @@ def prompts_list(
 
     try:
         params: Dict[str, Any] = {}
-        if gateway_id:
-            params["gateway_id"] = gateway_id
+        if mcp_server_id:
+            params["gateway_id"] = mcp_server_id
 
         result = make_authenticated_request("GET", "/prompts", params=params)
 
@@ -45,7 +45,12 @@ def prompts_list(
         else:
             prompts = result if isinstance(result, list) else [result]
             if prompts:
-                print_table(prompts, "Prompts", ["id", "name", "description", "gateway_id", "is_active"])
+                print_table(
+                    prompts,
+                    "Prompts",
+                    ["id", "name", "description", "gateway_id", "enabled"],
+                    {"gateway_id": "mcp_server_id"},
+                )
             else:
                 console.print("[yellow]No prompts found[/yellow]")
 
