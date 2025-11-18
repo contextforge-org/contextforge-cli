@@ -276,6 +276,25 @@ class TestResourcesCommandsIntegration:
             assert body["text"] == resource_body["content"]
             mocks.print_json.reset_mock()
 
+        update_resource_body = {"name": "foobar", "content": "oh hello there"}
+        with patch_functions(
+            "cforge.commands.resources.resources",
+            get_console=mock_console,
+            print_json=None,
+            prompt_for_schema={"return_value": update_resource_body},
+        ) as mocks:
+            # Update the resource
+            resources_update(resource_id, data_file=None)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            assert body["uri"] == resource_body["uri"]
+            assert body["name"] == update_resource_body["name"]
+            mocks.print_json.reset_mock()
+            resources_get(resource_id)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            assert body["text"] == update_resource_body["content"]
+
             # Delete the resource
             resources_delete(resource_id)
             mocks.print_json.reset_mock()
