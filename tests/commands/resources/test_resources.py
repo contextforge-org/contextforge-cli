@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 # Third-Party
+import click
 import pytest
 import typer
 
@@ -28,6 +29,7 @@ from cforge.commands.resources.resources import (
     resources_toggle,
     resources_update,
 )
+from tests.conftest import patch_functions
 
 
 class TestResourcesCommands:
@@ -231,3 +233,53 @@ class TestResourcesCommands:
             with patch("cforge.commands.resources.resources.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
                     resources_subscribe(resource_id=1)
+
+
+class TestResourcesCommandsIntegration:
+    """Test resources commands with a real gateway test client."""
+
+    def test_resources_list_get(self, mock_console, registered_mcp_server) -> None:
+        """Test listing and getting resources from a registered MCP server"""
+        with patch_functions("cforge.commands.resources.resources", get_console=mock_console, print_json=None) as mocks:
+            resources_list(json_output=True)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            assert isinstance(body, list) and len(body) == 1
+            for prompt in body:
+                mocks.print_json.reset_mock()
+                resources_get(prompt["id"])
+                mocks.print_json.assert_called_once()
+                body = mocks.print_json.call_args[0][0]
+                assert isinstance(body, dict)
+
+    def test_resources_lifecycle(self, mock_console, authorized_mock_client) -> None:
+        """Test the lifecycle of resources created via the API not a server"""
+        resource_body = {"name": "foo", "content": "hi there", "uri": "resource://test-greet"}
+        with patch_functions(
+            "cforge.commands.resources.resources",
+            get_console=mock_console,
+            print_json=None,
+            prompt_for_schema={"return_value": resource_body},
+        ) as mocks:
+            # Create the resource
+            resources_create(data_file=None)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            resource_id = body["id"]
+            mocks.print_json.reset_mock()
+
+            # Get the resource by id
+            resources_get(resource_id)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            assert body["uri"] == resource_body["uri"]
+            assert body["text"] == resource_body["content"]
+            mocks.print_json.reset_mock()
+
+            # Delete the resource
+            resources_delete(resource_id)
+            mocks.print_json.reset_mock()
+
+            # Make sure it's gone
+            with pytest.raises(click.exceptions.Exit):
+                resources_get(resource_id)
