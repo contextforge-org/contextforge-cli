@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Union
 import json
 
 # Third-Party
+from pydantic_core import PydanticUndefined
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -262,7 +263,7 @@ def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = 
         annotation = field_info.annotation
         description = field_info.description or field_name
         is_required = field_info.is_required()
-        default = field_info.default if field_info.default is not None else None
+        default = field_info.default if field_info.default is not PydanticUndefined else None
 
         # Get the actual type (handle Optional, Union, etc.)
         origin = get_origin(annotation)
