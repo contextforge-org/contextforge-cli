@@ -27,7 +27,7 @@ from mcpgateway.schemas import ResourceCreate
 
 
 def resources_list(
-    gateway_id: Optional[str] = typer.Option(None, "--mcp-server-id", "-m", help="Filter by MCP Server ID"),
+    mcp_server_id: Optional[str] = typer.Option(None, "--mcp-server-id", "-m", help="Filter by MCP Server ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List all resources in the gateway."""
@@ -35,8 +35,8 @@ def resources_list(
 
     try:
         params: Dict[str, Any] = {}
-        if gateway_id:
-            params["gateway_id"] = gateway_id
+        if mcp_server_id:
+            params["gateway_id"] = mcp_server_id
 
         result = make_authenticated_request("GET", "/resources", params=params)
 
@@ -45,7 +45,12 @@ def resources_list(
         else:
             resources = result if isinstance(result, list) else [result]
             if resources:
-                print_table(resources, "Resources", ["id", "name", "uri", "description", "gateway_id", "is_active"])
+                print_table(
+                    resources,
+                    "Resources",
+                    ["id", "name", "uri", "description", "gateway_id", "enabled"],
+                    {"gateway_id": "mcp_server_id"},
+                )
             else:
                 console.print("[yellow]No resources found[/yellow]")
 
@@ -104,7 +109,7 @@ def resources_create(
         else:
             data = prompt_for_schema(ResourceCreate, prefilled=prefilled if prefilled else None)
 
-        result = make_authenticated_request("POST", "/resources", json_data=data)
+        result = make_authenticated_request("POST", "/resources", json_data={"resource": data})
 
         console.print("[green]✓ Resource created successfully![/green]")
         print_json(result, "Created Resource")

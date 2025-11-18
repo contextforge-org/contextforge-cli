@@ -35,12 +35,12 @@ class TestResourcesCommands:
 
     def test_resources_list_success(self, mock_console) -> None:
         """Test resources list command."""
-        mock_resources = [{"id": 1, "name": "resource1", "uri": "file:///path", "description": "desc1", "gateway_id": 1, "is_active": True}]
+        mock_resources = [{"id": 1, "name": "resource1", "uri": "file:///path", "description": "desc1", "mcp_server_id": "server1234", "enabled": True}]
 
         with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_resources):
                 with patch("cforge.commands.resources.resources.print_table") as mock_print:
-                    resources_list(gateway_id=None, json_output=False)
+                    resources_list(mcp_server_id=None, json_output=False)
                     mock_print.assert_called_once()
 
     def test_resources_list_json_output(self, mock_console) -> None:
@@ -48,7 +48,7 @@ class TestResourcesCommands:
         with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=[]):
                 with patch("cforge.commands.resources.resources.print_json") as mock_print:
-                    resources_list(gateway_id=None, json_output=True)
+                    resources_list(mcp_server_id=None, json_output=True)
                     mock_print.assert_called_once()
 
     def test_resources_list_with_filters(self, mock_console) -> None:
@@ -56,7 +56,7 @@ class TestResourcesCommands:
         with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=[]) as mock_req:
                 with patch("cforge.commands.resources.resources.print_table"):
-                    resources_list(gateway_id=5, json_output=False)
+                    resources_list(mcp_server_id=5, json_output=False)
 
                 # Verify params
                 call_args = mock_req.call_args
@@ -66,7 +66,7 @@ class TestResourcesCommands:
         """Test resources list with no results."""
         with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=[]):
-                resources_list(gateway_id=None, json_output=False)
+                resources_list(mcp_server_id=None, json_output=False)
 
         # Verify "No resources found" message
         assert any("No resources found" in str(call) for call in mock_console.print.call_args_list)
@@ -76,7 +76,7 @@ class TestResourcesCommands:
         with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.resources.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
-                    resources_list(gateway_id=None, json_output=False)
+                    resources_list(mcp_server_id=None, json_output=False)
 
     def test_resources_get_success(self, mock_console) -> None:
         """Test resources get command."""
@@ -179,7 +179,7 @@ class TestResourcesCommands:
 
     def test_resources_toggle_success(self, mock_console) -> None:
         """Test resources toggle command."""
-        mock_result = {"id": 1, "is_active": False}
+        mock_result = {"id": 1, "enabled": False}
 
         with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_result):
