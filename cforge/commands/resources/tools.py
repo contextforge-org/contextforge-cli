@@ -27,7 +27,7 @@ from mcpgateway.schemas import ToolCreate
 
 
 def tools_list(
-    gateway_id: Optional[str] = typer.Option(None, "--mcp-server-id", "-m", help="Filter by MCP Server ID"),
+    mcp_server_id: Optional[str] = typer.Option(None, "--mcp-server-id", "-m", help="Filter by MCP Server ID"),
     active_only: bool = typer.Option(False, "--active-only", help="Show only active tools"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
@@ -36,8 +36,8 @@ def tools_list(
 
     try:
         params: dict[str, Any] = {}
-        if gateway_id:
-            params["gateway_id"] = gateway_id
+        if mcp_server_id:
+            params["gateway_id"] = mcp_server_id
         if active_only:
             params["active"] = "true"
 
@@ -48,7 +48,12 @@ def tools_list(
         else:
             tools = result if isinstance(result, list) else [result]
             if tools:
-                print_table(tools, "Tools", ["id", "name", "description", "gateway_id", "is_active"])
+                print_table(
+                    tools,
+                    "Tools",
+                    ["id", "name", "description", "gateway_id", "enabled"],
+                    {"gateway_id": "mcp_server_id"},
+                )
             else:
                 console.print("[yellow]No tools found[/yellow]")
 

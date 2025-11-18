@@ -23,7 +23,7 @@ from cforge.common import (
     print_table,
     prompt_for_schema,
 )
-from mcpgateway.schemas import GatewayCreate
+from mcpgateway.schemas import GatewayCreate, GatewayUpdate
 
 
 def mcp_servers_list(
@@ -115,17 +115,20 @@ def mcp_servers_create(
 
 def mcp_servers_update(
     mcp_server_id: str = typer.Argument(..., help="MCP Server ID"),
-    data_file: Path = typer.Argument(..., help="JSON file containing updated gateway data"),
+    data_file: Optional[Path] = typer.Argument(None, help="JSON file containing updated gateway data (interactive mode if not provided)"),
 ) -> None:
     """Update an existing MCP server."""
     console = get_console()
 
     try:
-        if not data_file.exists():
-            console.print(f"[red]File not found: {data_file}[/red]")
-            raise typer.Exit(1)
+        if data_file:
+            if not data_file.exists():
+                console.print(f"[red]File not found: {data_file}[/red]")
+                raise typer.Exit(1)
+            data = json.loads(data_file.read_text())
+        else:
+            data = prompt_for_schema(GatewayUpdate)
 
-        data = json.loads(data_file.read_text())
         result = make_authenticated_request("PUT", f"/gateways/{mcp_server_id}", json_data=data)
 
         console.print("[green]✓ MCP server updated successfully![/green]")

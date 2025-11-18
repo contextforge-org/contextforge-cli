@@ -33,12 +33,12 @@ class TestToolsCommands:
 
     def test_tools_list_success(self, mock_console) -> None:
         """Test tools list command."""
-        mock_tools = [{"id": 1, "name": "tool1", "description": "desc1", "gateway_id": 1, "is_active": True}]
+        mock_tools = [{"id": 1, "name": "tool1", "description": "desc1", "mcp_server_id": 1, "enabled": True}]
 
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=mock_tools):
                 with patch("cforge.commands.resources.tools.print_table") as mock_print:
-                    tools_list(gateway_id=None, active_only=False, json_output=False)
+                    tools_list(mcp_server_id=None, active_only=False, json_output=False)
                     mock_print.assert_called_once()
 
     def test_tools_list_json_output(self, mock_console) -> None:
@@ -46,7 +46,7 @@ class TestToolsCommands:
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=[]):
                 with patch("cforge.commands.resources.tools.print_json") as mock_print:
-                    tools_list(gateway_id=None, active_only=False, json_output=True)
+                    tools_list(mcp_server_id=None, active_only=False, json_output=True)
                     mock_print.assert_called_once()
 
     def test_tools_list_with_filters(self, mock_console) -> None:
@@ -54,18 +54,18 @@ class TestToolsCommands:
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=[]) as mock_req:
                 with patch("cforge.commands.resources.tools.print_table"):
-                    tools_list(gateway_id=5, active_only=True, json_output=False)
+                    tools_list(mcp_server_id="5", active_only=True, json_output=False)
 
                 # Verify params
                 call_args = mock_req.call_args
-                assert call_args[1]["params"]["gateway_id"] == 5
+                assert call_args[1]["params"]["gateway_id"] == "5"
                 assert call_args[1]["params"]["active"] == "true"
 
     def test_tools_list_no_results(self, mock_console) -> None:
         """Test tools list with no results."""
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=[]):
-                tools_list(gateway_id=None, active_only=False, json_output=False)
+                tools_list(mcp_server_id=None, active_only=False, json_output=False)
 
         # Verify "No tools found" message
         assert any("No tools found" in str(call) for call in mock_console.print.call_args_list)
@@ -75,7 +75,7 @@ class TestToolsCommands:
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
-                    tools_list(gateway_id=None, active_only=False, json_output=False)
+                    tools_list(mcp_server_id=None, active_only=False, json_output=False)
 
     def test_tools_get_success(self, mock_console) -> None:
         """Test tools get command."""
@@ -177,7 +177,7 @@ class TestToolsCommands:
 
     def test_tools_toggle_success(self, mock_console) -> None:
         """Test tools toggle command."""
-        mock_result = {"id": 1, "is_active": False}
+        mock_result = {"id": 1, "enabled": False}
 
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=mock_result):
