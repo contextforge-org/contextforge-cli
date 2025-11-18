@@ -27,6 +27,7 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 from mcp.server.fastmcp import FastMCP
+from pydantic import SecretStr
 from typer.testing import CliRunner
 
 
@@ -146,7 +147,10 @@ def mock_client_login(mock_client: TestClient) -> Generator[None, None, None]:
     """Provide a context manager for logging into a FastAPI TestClient."""
     cfg = get_settings()
     current_token = cfg.mcpgateway_bearer_token
-    resp = mock_client.post("/auth/login", json={"email": cfg.platform_admin_email, "password": cfg.basic_auth_password})
+    pw = cfg.basic_auth_password
+    if isinstance(pw, SecretStr):
+        pw = pw.get_secret_value()
+    resp = mock_client.post("/auth/login", json={"email": cfg.platform_admin_email, "password": pw})
     cfg.mcpgateway_bearer_token = resp.json()["access_token"]
     setattr(mock_client, "settings", cfg)
     try:
