@@ -134,7 +134,7 @@ def make_authenticated_request(
     url: str,
     json_data: Optional[Dict[str, Any]] = None,
     params: Optional[Dict[str, Any]] = None,
-) -> Union[Dict[str, Any], List[Any]]:
+) -> Dict[str, Any]:
     """Make an authenticated HTTP request to the gateway API.
 
     Args:
@@ -196,19 +196,26 @@ def print_json(data: Any, title: Optional[str] = None) -> None:
         console.print(syntax)
 
 
-def print_table(data: List[Dict], title: str, columns: List[str]) -> None:
+def print_table(
+    data: List[Dict],
+    title: str,
+    columns: List[str],
+    col_name_map: Optional[Dict[str, str]] = None,
+) -> None:
     """Print data as a Rich table.
 
     Args:
         data: List of dictionaries to display
         title: Title for the table
         columns: List of column names to display
+        col_name_map: Optional mapping of column names to display
     """
     console = get_console()
     table = Table(title=title, show_header=True, header_style="bold magenta")
+    col_name_map = col_name_map or {}
 
     for column in columns:
-        table.add_column(column, style="cyan")
+        table.add_column(col_name_map.get(column, column), style="cyan")
 
     for item in data:
         row = [str(item.get(col, "")) for col in columns]
