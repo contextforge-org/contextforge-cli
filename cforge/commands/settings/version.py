@@ -9,13 +9,13 @@ CLI command: version
 
 # First-Party
 from cforge.common import get_console, make_authenticated_request
-import mcpgateway
+from mcpgateway import __version__
 
 
 def version() -> None:
     """Display version information."""
     console = get_console()
-    client_version = getattr(mcpgateway, "__version__", "unknown")
+    client_version = __version__
     server_version = "UNREACHABLE"
     try:
         server_version_response = make_authenticated_request("GET", "/version")
