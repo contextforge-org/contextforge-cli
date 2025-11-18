@@ -194,7 +194,6 @@ def mock_mcp_server_sse(tools: List[Callable], prompts: List[str], resources: Li
                 break
         else:
             raise RuntimeError("Failed to start MCP server")
-
         yield config
     finally:
         server.should_exit = True
@@ -294,14 +293,11 @@ def mock_mcp_server() -> Generator[dict, None, None]:
 @pytest.fixture
 def registered_mcp_server(mock_mcp_server, authorized_mock_client) -> Generator[dict, None, None]:
     """Test-level fixture to register the mock server and unregister at the end"""
-    result = authorized_mock_client.post(
-        "/gateways",
-        json=mock_mcp_server,
-        headers={"Authorization": f"Bearer {authorized_mock_client.settings.mcpgateway_bearer_token}"},
-    )
+    headers = {"Authorization": f"Bearer {authorized_mock_client.settings.mcpgateway_bearer_token}"}
+    result = authorized_mock_client.post("/gateways", json=mock_mcp_server, headers=headers)
     body = result.json()
     mcp_server_id = body["id"]
     try:
         yield body
     finally:
-        authorized_mock_client.delete(f"/gateways/{mcp_server_id}")
+        authorized_mock_client.delete(f"/gateways/{mcp_server_id}", headers=headers)
