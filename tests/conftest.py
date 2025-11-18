@@ -165,8 +165,12 @@ def mock_mcp_server_sse(tools: List[Callable], prompts: List[str], resources: Li
         mcp.tool()(tool)
     for prompt in prompts:
         mcp.prompt(name=prompt[:5])(lambda: prompt)
-    for resource in resources:
-        mcp.resource(f"raw://{resource[:5]}", name=resource.split()[0])(lambda: resource)
+    for i, resource in enumerate(resources):
+
+        def my_resource() -> str:
+            return resource
+
+        mcp.resource(f"resource://{resource[:5]}", name=f"resource_{i}")(my_resource)
 
     port = get_open_port()
     config = uvicorn.Config(mcp.sse_app(), host="localhost", port=port, log_level="error")
