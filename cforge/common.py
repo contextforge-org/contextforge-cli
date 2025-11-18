@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Union
 import json
 
 # Third-Party
+from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 from rich.console import Console
 from rich.table import Table
@@ -230,21 +231,24 @@ def print_table(
 # ------------------------------------------------------------------------------
 
 
-def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = None, indent: str = "") -> Dict[str, Any]:
     """Interactively prompt user for fields based on a Pydantic schema.
 
     Args:
         schema_class: The Pydantic model class to use for prompting
         prefilled: Optional dictionary of pre-filled values to skip prompting for
+        indent: Indentation string for nested fields
 
     Returns:
         Dictionary with the user's input data (includes prefilled values)
     """
     from typing import get_args, get_origin
 
+    formatted_indent = f"[dim]{indent}[/dim]" if indent else indent
+
     console = get_console()
-    console.print(f"\n[bold cyan]Creating {schema_class.__name__}[/bold cyan]")
-    console.print("[dim]Press Enter to skip optional fields[/dim]\n")
+    console.print(f"\n{formatted_indent}[bold cyan]Creating {schema_class.__name__}[/bold cyan]")
+    console.print(f"{formatted_indent}[dim]Press Enter to skip optional fields[/dim]\n{formatted_indent}")
 
     data = prefilled.copy() if prefilled else {}
     model_fields = schema_class.model_fields
@@ -252,7 +256,7 @@ def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = 
     for field_name, field_info in model_fields.items():
         # Skip if already provided
         if field_name in data:
-            console.print(f"[dim]{field_name}: {data[field_name]} (pre-filled)[/dim]")
+            console.print(f"{formatted_indent}[dim]{field_name}: {data[field_name]} (pre-filled)[/dim]")
             continue
 
         # Skip internal fields
@@ -287,8 +291,11 @@ def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = 
 
         # Handle different types
         if actual_type is bool or str(actual_type) == "bool":
-            if is_required or typer.confirm(f"Include {field_name}?", default=False):
-                data[field_name] = typer.confirm(prompt_text, default=bool(default) if default else False)
+            if not is_required:
+                console.print(f"{formatted_indent}Include {field_name}?", end="")
+            if is_required or typer.confirm("", default=False):
+                console.print(f"{formatted_indent}{prompt_text}", end="")
+                data[field_name] = typer.confirm("", default=bool(default) if default else False)
 
         elif actual_type is int or str(actual_type) == "int":
             value = typer.prompt(prompt_text, type=int, default=default if default is not None else "", show_default=default is not None)
@@ -296,21 +303,40 @@ def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = 
                 data[field_name] = value
 
         elif get_origin(actual_type) is list or str(actual_type).startswith("list"):
-            console.print(f"[yellow]{prompt_text}[/yellow]")
-            console.print("[dim]Enter comma-separated values, or press Enter to skip[/dim]")
-            value = typer.prompt("", default="", show_default=False)
-            if value:
-                # Parse comma-separated values
-                data[field_name] = [v.strip() for v in value.split(",") if v.strip()]
+            list_type = get_args(actual_type)[0]
+            console.print(f"{formatted_indent}[yellow]{prompt_text}[/yellow]")
+            if isinstance(list_type, type) and issubclass(list_type, BaseModel):
+                # Loop collecting more arguments until the user wants to stop
+                entries = []
+                while True:
+                    console.print(f"{formatted_indent}[dim]Add an entry?[/dim] ", end="")
+                    if not typer.confirm("", default=False):
+                        break
+                    if not indent:
+                        indent = "|"
+                    indent += "-"
+                    entries.append(prompt_for_schema(list_type, indent=indent))
+                data[field_name] = entries
+
+            # Assume string
+            else:
+                console.print(f"{formatted_indent}[dim]Enter comma-separated values, or press Enter to skip[/dim] ", end="")
+                value = typer.prompt("", default="", show_default=False)
+                if value:
+                    # Parse comma-separated values
+                    data[field_name] = [v.strip() for v in value.split(",") if v.strip()]
 
         else:  # Treat as string
+            console.print(f"{formatted_indent}{prompt_text}", end="")
             value = typer.prompt(
-                prompt_text,
+                "",
                 type=str,
                 default=default if default is not None else "",
                 show_default=default is not None and default != "",
             )
             if value and value != "":
                 data[field_name] = value
+            if is_required and not value:
+                raise CLIError(f"Field '{field_name}' is required")
 
     return data
