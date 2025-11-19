@@ -10,7 +10,7 @@ Common utilities for Context Forge CLI.
 # Standard
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import json
 
 # Third-Party
@@ -65,6 +65,28 @@ class CLIError(Exception):
 
 class AuthenticationError(CLIError):
     """Raised when authentication fails."""
+
+
+def split_exception_details(exception: Exception) -> Tuple[str, Any]:
+    """Try to get parsed details from the exception"""
+    exc_str = str(exception)
+    splits = exc_str.split(":", 1)
+    if len(splits) == 2:
+        try:
+            parsed_details = json.loads(splits[1])
+            return splits[0], parsed_details
+        except json.JSONDecodeError:
+            pass
+    return exc_str, None
+
+
+def handle_exception(exception: Exception) -> None:
+    """Handle an exception and print a friendly error message."""
+    e_str, e_detail = split_exception_details(exception)
+    get_console().print(f"[red]Error: {e_str}[/red]")
+    if e_detail:
+        print_json(e_detail, "Error details")
+    raise typer.Exit(1)
 
 
 # ------------------------------------------------------------------------------

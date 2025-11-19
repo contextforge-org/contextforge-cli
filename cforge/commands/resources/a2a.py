@@ -18,6 +18,7 @@ import typer
 # First-Party
 from cforge.common import (
     get_console,
+    handle_exception,
     make_authenticated_request,
     print_json,
     print_table,
@@ -45,23 +46,19 @@ def a2a_list(
                 console.print("[yellow]No A2A agents found[/yellow]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def a2a_get(
     agent_id: int = typer.Argument(..., help="Agent ID"),
 ) -> None:
     """Get details of a specific A2A agent."""
-    console = get_console()
-
     try:
         result = make_authenticated_request("GET", f"/a2a/{agent_id}")
         print_json(result, f"A2A Agent {agent_id}")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def a2a_create(
@@ -105,8 +102,7 @@ def a2a_create(
         print_json(result, "Registered A2A Agent")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def a2a_update(
@@ -128,8 +124,7 @@ def a2a_update(
         print_json(result, "Updated A2A Agent")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def a2a_delete(
@@ -150,8 +145,7 @@ def a2a_delete(
         console.print(f"[green]✓ A2A agent {agent_id} deleted successfully![/green]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def a2a_toggle(
@@ -166,8 +160,7 @@ def a2a_toggle(
         print_json(result, "A2A Agent Status")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def a2a_invoke(
@@ -189,5 +182,4 @@ def a2a_invoke(
         print_json(result, "Invocation Result")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)

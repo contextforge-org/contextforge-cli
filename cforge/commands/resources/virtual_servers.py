@@ -18,6 +18,7 @@ import typer
 # First-Party
 from cforge.common import (
     get_console,
+    handle_exception,
     make_authenticated_request,
     print_json,
     print_table,
@@ -45,23 +46,19 @@ def virtual_servers_list(
                 console.print("[yellow]No virtual servers found[/yellow]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def virtual_servers_get(
     server_id: int = typer.Argument(..., help="Server ID"),
 ) -> None:
     """Get details of a specific virtual server."""
-    console = get_console()
-
     try:
         result = make_authenticated_request("GET", f"/servers/{server_id}")
         print_json(result, f"Virtual Server {server_id}")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def virtual_servers_create(
@@ -102,8 +99,7 @@ def virtual_servers_create(
         print_json(result, "Created Virtual Server")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def virtual_servers_update(
@@ -125,8 +121,7 @@ def virtual_servers_update(
         print_json(result, "Updated Virtual Server")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def virtual_servers_delete(
@@ -147,8 +142,7 @@ def virtual_servers_delete(
         console.print(f"[green]✓ Virtual server {server_id} deleted successfully![/green]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def virtual_servers_toggle(
@@ -163,8 +157,7 @@ def virtual_servers_toggle(
         print_json(result, "Virtual Server Status")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def virtual_servers_tools(
@@ -187,8 +180,7 @@ def virtual_servers_tools(
                 console.print("[yellow]No tools found[/yellow]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def virtual_servers_resources(
@@ -211,8 +203,7 @@ def virtual_servers_resources(
                 console.print("[yellow]No resources found[/yellow]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def virtual_servers_prompts(
@@ -235,5 +226,4 @@ def virtual_servers_prompts(
                 console.print("[yellow]No prompts found[/yellow]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)

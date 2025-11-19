@@ -18,6 +18,7 @@ import typer
 # First-Party
 from cforge.common import (
     get_console,
+    handle_exception,
     make_authenticated_request,
     print_json,
     print_table,
@@ -45,23 +46,19 @@ def mcp_servers_list(
                 console.print("[yellow]No MCP servers found[/yellow]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def mcp_servers_get(
     mcp_server_id: str = typer.Argument(..., help="MCP Server ID"),
 ) -> None:
     """Get details of a specific MCP server."""
-    console = get_console()
-
     try:
         result = make_authenticated_request("GET", f"/gateways/{mcp_server_id}")
         print_json(result, f"MCP Server {mcp_server_id}")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def mcp_servers_create(
@@ -109,8 +106,7 @@ def mcp_servers_create(
         print_json(result, "Registered MCP Server")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def mcp_servers_update(
@@ -135,8 +131,7 @@ def mcp_servers_update(
         print_json(result, "Updated MCP Server")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def mcp_servers_delete(
@@ -157,8 +152,7 @@ def mcp_servers_delete(
         console.print(f"[green]✓ MCP server {mcp_server_id} deleted successfully![/green]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def mcp_servers_toggle(
@@ -181,5 +175,4 @@ def mcp_servers_toggle(
         print_json(result, "MCP Server Status")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)

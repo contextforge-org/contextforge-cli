@@ -18,6 +18,7 @@ import typer
 # First-Party
 from cforge.common import (
     get_console,
+    handle_exception,
     make_authenticated_request,
     print_json,
     print_table,
@@ -55,23 +56,19 @@ def prompts_list(
                 console.print("[yellow]No prompts found[/yellow]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def prompts_get(
     prompt_id: int = typer.Argument(..., help="Prompt ID"),
 ) -> None:
     """Get details of a specific prompt."""
-    console = get_console()
-
     try:
         result = make_authenticated_request("GET", f"/prompts/{prompt_id}")
         print_json(result, f"Prompt {prompt_id}")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def prompts_create(
@@ -112,8 +109,7 @@ def prompts_create(
         print_json(result, "Created Prompt")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def prompts_update(
@@ -138,8 +134,7 @@ def prompts_update(
         print_json(result, "Updated Prompt")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def prompts_delete(
@@ -160,8 +155,7 @@ def prompts_delete(
         console.print(f"[green]✓ Prompt {prompt_id} deleted successfully![/green]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def prompts_toggle(
@@ -176,8 +170,7 @@ def prompts_toggle(
         print_json(result, "Prompt Status")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def prompts_execute(
@@ -200,5 +193,4 @@ def prompts_execute(
         print_json(result, "Prompt Result")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)

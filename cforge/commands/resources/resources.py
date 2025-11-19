@@ -18,6 +18,7 @@ import typer
 # First-Party
 from cforge.common import (
     get_console,
+    handle_exception,
     make_authenticated_request,
     print_json,
     print_table,
@@ -55,23 +56,19 @@ def resources_list(
                 console.print("[yellow]No resources found[/yellow]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def resources_get(
     resource_id: int = typer.Argument(..., help="Resource ID"),
 ) -> None:
     """Get details of a specific resource."""
-    console = get_console()
-
     try:
         result = make_authenticated_request("GET", f"/resources/{resource_id}")
         print_json(result, f"Resource {resource_id}")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def resources_create(
@@ -115,8 +112,7 @@ def resources_create(
         print_json(result, "Created Resource")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def resources_update(
@@ -141,8 +137,7 @@ def resources_update(
         print_json(result, "Updated Resource")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def resources_delete(
@@ -163,8 +158,7 @@ def resources_delete(
         console.print(f"[green]✓ Resource {resource_id} deleted successfully![/green]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def resources_toggle(
@@ -179,21 +173,17 @@ def resources_toggle(
         print_json(result, "Resource Status")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def resources_templates() -> None:
     """List available resource templates."""
-    console = get_console()
-
     try:
         result = make_authenticated_request("GET", "/resources/templates/list")
         print_json(result, "Resource Templates")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def resources_subscribe(
@@ -208,5 +198,4 @@ def resources_subscribe(
         print_json(result, "Subscription")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)

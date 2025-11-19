@@ -18,6 +18,7 @@ import typer
 # First-Party
 from cforge.common import (
     get_console,
+    handle_exception,
     make_authenticated_request,
     print_json,
     print_table,
@@ -39,7 +40,7 @@ def tools_list(
         if mcp_server_id:
             params["gateway_id"] = mcp_server_id
         if active_only:
-            params["active"] = "true"
+            params["active"] = True
 
         result = make_authenticated_request("GET", "/tools", params=params)
 
@@ -58,8 +59,7 @@ def tools_list(
                 console.print("[yellow]No tools found[/yellow]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def tools_get(
@@ -67,15 +67,12 @@ def tools_get(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """Get details of a specific tool."""
-    console = get_console()
-
     try:
         result = make_authenticated_request("GET", f"/tools/{tool_id}")
         print_json(result, f"Tool {tool_id}")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def tools_create(
@@ -110,14 +107,13 @@ def tools_create(
         else:
             data = prompt_for_schema(ToolCreate, prefilled=prefilled if prefilled else None)
 
-        result = make_authenticated_request("POST", "/tools", json_data=data)
+        result = make_authenticated_request("POST", "/tools", json_data={"tool": data})
 
         console.print("[green]✓ Tool created successfully![/green]")
         print_json(result, "Created Tool")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def tools_update(
@@ -139,8 +135,7 @@ def tools_update(
         print_json(result, "Updated Tool")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def tools_delete(
@@ -161,8 +156,7 @@ def tools_delete(
         console.print(f"[green]✓ Tool {tool_id} deleted successfully![/green]")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
 
 
 def tools_toggle(
@@ -177,5 +171,4 @@ def tools_toggle(
         print_json(result, "Tool Status")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
-        raise typer.Exit(1)
+        handle_exception(e)
