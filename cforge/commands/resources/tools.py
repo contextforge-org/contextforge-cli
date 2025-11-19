@@ -24,7 +24,7 @@ from cforge.common import (
     print_table,
     prompt_for_schema,
 )
-from mcpgateway.schemas import ToolCreate
+from mcpgateway.schemas import ToolCreate, ToolUpdate
 
 
 def tools_list(
@@ -118,17 +118,20 @@ def tools_create(
 
 def tools_update(
     tool_id: int = typer.Argument(..., help="Tool ID"),
-    data_file: Path = typer.Argument(..., help="JSON file containing updated tool data"),
+    data_file: Optional[Path] = typer.Argument(None, help="JSON file containing updated tool data"),
 ) -> None:
     """Update an existing tool."""
     console = get_console()
 
     try:
-        if not data_file.exists():
-            console.print(f"[red]File not found: {data_file}[/red]")
-            raise typer.Exit(1)
+        if data_file:
+            if not data_file.exists():
+                console.print(f"[red]File not found: {data_file}[/red]")
+                raise typer.Exit(1)
+            data = json.loads(data_file.read_text())
+        else:
+            data = prompt_for_schema(ToolUpdate)
 
-        data = json.loads(data_file.read_text())
         result = make_authenticated_request("PUT", f"/tools/{tool_id}", json_data=data)
 
         console.print("[green]✓ Tool updated successfully![/green]")
