@@ -266,7 +266,16 @@ def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = 
     """
     from typing import get_args, get_origin
 
-    formatted_indent = f"[dim]{indent}[/dim]" if indent else indent
+    def _format_indent(indt: str) -> str:
+        """Format the indentation as dim"""
+        return f"[dim]{indt}[/dim]" if indt else indt
+
+    formatted_indent = _format_indent(indent)
+    next_indent = indent
+    if not next_indent:
+        next_indent = "|"
+    next_indent += "-"
+    formatted_next_indent = _format_indent(next_indent)
 
     console = get_console()
     console.print(f"\n{formatted_indent}[bold cyan]Creating {schema_class.__name__}[/bold cyan]")
@@ -317,11 +326,15 @@ def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = 
                 console.print(f"{formatted_indent}Include {field_name}?", end="")
             if is_required or typer.confirm("", default=False):
                 console.print(f"{formatted_indent}{prompt_text}", end="")
-                data[field_name] = typer.confirm("", default=bool(default) if default else False)
+                data[field_name] = typer.prompt("", default=bool(default) if default else False, type=bool)
 
         elif actual_type is int or str(actual_type) == "int":
-            value = typer.prompt(prompt_text, type=int, default=default if default is not None else "", show_default=default is not None)
-            if value != "":
+            sentinel_default = -4231415  # Very unlikely number for any valid param
+            default_val = default
+            if default is None:
+                default_val = "" if is_required else sentinel_default
+            value = typer.prompt(prompt_text, type=int, default=default_val, show_default=default_val not in ["", sentinel_default])
+            if value != sentinel_default:
                 data[field_name] = value
 
         elif get_origin(actual_type) is list or str(actual_type).startswith("list"):
@@ -347,6 +360,29 @@ def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = 
                 if value:
                     # Parse comma-separated values
                     data[field_name] = [v.strip() for v in value.split(",") if v.strip()]
+
+        elif get_origin(actual_type) is dict:
+            dict_key_type, dict_value_type = get_args(actual_type)
+            console.print(f"{formatted_indent}[yellow]{prompt_text}[/yellow]")
+            assert dict_key_type is str, "Only string keys are supported"
+            data[field_name] = {}
+            while True:
+                console.print(f"{formatted_indent}[dim]Add an entry?[/dim] ", end="")
+                if not typer.confirm("", default=False):
+                    break
+                console.print(f"{formatted_next_indent}Enter key", end="")
+                key = typer.prompt("")
+                if isinstance(dict_value_type, type) and issubclass(dict_value_type, BaseModel):
+                    val = prompt_for_schema(dict_value_type, indent=next_indent)
+                else:
+                    console.print(f"{formatted_next_indent}Enter value", end="")
+                    parse_type = dict_value_type if dict_value_type is not Any else str
+                    val = typer.prompt("", type=parse_type)
+
+                    # If the value type is Any, try to parse it as JSON
+                    if dict_value_type is Any:
+                        val = json.loads(val)
+                data[field_name][key] = val
 
         else:  # Treat as string
             console.print(f"{formatted_indent}{prompt_text}", end="")
