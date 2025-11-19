@@ -134,6 +134,14 @@ class TestMcpServersCommands:
             with pytest.raises(typer.Exit):
                 mcp_servers_update(mcp_server_id="test-server-123", data_file=Path("/nonexistent.json"))
 
+    def test_mcp_servers_update_prompt_for_schema(self, mock_console) -> None:
+        """Test mcp-servers update with interactive schema prompt."""
+        with patch_functions("cforge.commands.resources.mcp_servers", make_authenticated_request=None, print_json=None, get_console=mock_console) as mocks:
+            update_body = {"name": "updated"}
+            with patch("cforge.commands.resources.mcp_servers.prompt_for_schema", return_value=update_body):
+                mcp_servers_update(mcp_server_id="test-server-123", data_file=None)
+                mocks.make_authenticated_request.assert_called_once_with("PUT", "/gateways/test-server-123", json_data=update_body)
+
     def test_mcp_servers_delete_with_confirmation(self, mock_console) -> None:
         """Test mcp-servers delete with confirmation."""
         with patch_functions("cforge.commands.resources.mcp_servers", make_authenticated_request=None):

@@ -153,6 +153,14 @@ class TestResourcesCommands:
             with pytest.raises(typer.Exit):
                 resources_update(resource_id=1, data_file=Path("/nonexistent.json"))
 
+    def test_resources_update_resource_for_schema(self, mock_console) -> None:
+        """Test resources update with interactive schema resource."""
+        with patch_functions("cforge.commands.resources.resources", make_authenticated_request=None, print_json=None, get_console=mock_console) as mocks:
+            update_body = {"name": "updated"}
+            with patch("cforge.commands.resources.resources.prompt_for_schema", return_value=update_body):
+                resources_update(resource_id=1, data_file=None)
+                mocks.make_authenticated_request.assert_called_once_with("PUT", "/resources/1", json_data=update_body)
+
     def test_resources_delete_with_confirmation(self, mock_console) -> None:
         """Test resources delete with confirmation."""
         with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):

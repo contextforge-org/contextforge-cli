@@ -133,6 +133,14 @@ class TestPromptsCommands:
             with pytest.raises(typer.Exit):
                 prompts_update(prompt_id=1, data_file=Path("/nonexistent.json"))
 
+    def test_prompts_update_prompt_for_schema(self, mock_console) -> None:
+        """Test prompts update with interactive schema prompt."""
+        with patch_functions("cforge.commands.resources.prompts", make_authenticated_request=None, print_json=None, get_console=mock_console) as mocks:
+            update_body = {"name": "updated"}
+            with patch("cforge.commands.resources.prompts.prompt_for_schema", return_value=update_body):
+                prompts_update(prompt_id=1, data_file=None)
+                mocks.make_authenticated_request.assert_called_once_with("PUT", "/prompts/1", json_data=update_body)
+
     def test_prompts_delete_with_confirmation(self, mock_console) -> None:
         """Test prompts delete with confirmation."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=None):
