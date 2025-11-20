@@ -12,8 +12,13 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+# Third-Party
+import pytest
+
 # First-Party
+from cforge.commands.settings.login import login
 from cforge.commands.settings.logout import logout
+from cforge.common import AuthenticationError, make_authenticated_request
 
 
 class TestLogoutCommand:
@@ -52,3 +57,31 @@ class TestLogoutCommand:
             call_args = mock_console.print.call_args[0][0]
             assert "No stored token found" in call_args
             assert "[yellow]" in call_args
+
+
+class TestLogoutCommandIntegration:
+    """Test the logout command with a real gateway server."""
+
+    def test_logout_lifecycle(self, mock_console, mock_client, mock_settings) -> None:
+        """Test the full lifecycle of trying logged, logging in, then logging out"""
+
+        with patch("cforge.commands.settings.login.requests", mock_client):
+
+            # Try making an authenticated call (without the saved token)
+            with pytest.raises(AuthenticationError):
+                make_authenticated_request("GET", "/tools")
+
+            # Log in and try again
+            login(
+                email=mock_settings.platform_admin_email,
+                password=mock_settings.platform_admin_password.get_secret_value(),
+                save=True,
+            )
+            make_authenticated_request("GET", "/tools")
+
+            # Log out
+            logout()
+
+            # Try again (should fail)
+            with pytest.raises(AuthenticationError):
+                make_authenticated_request("GET", "/tools")
