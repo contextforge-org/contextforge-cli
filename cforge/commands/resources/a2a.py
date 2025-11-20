@@ -24,7 +24,7 @@ from cforge.common import (
     print_table,
     prompt_for_schema,
 )
-from mcpgateway.schemas import A2AAgentCreate
+from mcpgateway.schemas import A2AAgentCreate, A2AAgentUpdate
 
 
 def a2a_list(
@@ -41,7 +41,7 @@ def a2a_list(
         else:
             agents = result if isinstance(result, list) else [result]
             if agents:
-                print_table(agents, "A2A Agents", ["id", "name", "url", "description", "is_active"])
+                print_table(agents, "A2A Agents", ["id", "name", "endpointUrl", "description", "enabled"], {"endpointUrl": "url"})
             else:
                 console.print("[yellow]No A2A agents found[/yellow]")
 
@@ -50,7 +50,7 @@ def a2a_list(
 
 
 def a2a_get(
-    agent_id: int = typer.Argument(..., help="Agent ID"),
+    agent_id: str = typer.Argument(..., help="Agent ID"),
 ) -> None:
     """Get details of a specific A2A agent."""
     try:
@@ -96,7 +96,7 @@ def a2a_create(
         else:
             data = prompt_for_schema(A2AAgentCreate, prefilled=prefilled if prefilled else None)
 
-        result = make_authenticated_request("POST", "/a2a", json_data=data)
+        result = make_authenticated_request("POST", "/a2a", json_data={"agent": data})
 
         console.print("[green]✓ A2A agent registered successfully![/green]")
         print_json(result, "Registered A2A Agent")
@@ -106,18 +106,21 @@ def a2a_create(
 
 
 def a2a_update(
-    agent_id: int = typer.Argument(..., help="Agent ID"),
-    data_file: Path = typer.Argument(..., help="JSON file containing updated agent data"),
+    agent_id: str = typer.Argument(..., help="Agent ID"),
+    data_file: Optional[Path] = typer.Argument(None, help="JSON file containing updated agent data"),
 ) -> None:
     """Update an existing A2A agent."""
     console = get_console()
 
     try:
-        if not data_file.exists():
-            console.print(f"[red]File not found: {data_file}[/red]")
-            raise typer.Exit(1)
+        if data_file:
+            if not data_file.exists():
+                console.print(f"[red]File not found: {data_file}[/red]")
+                raise typer.Exit(1)
+            data = json.loads(data_file.read_text())
+        else:
+            data = prompt_for_schema(A2AAgentUpdate)
 
-        data = json.loads(data_file.read_text())
         result = make_authenticated_request("PUT", f"/a2a/{agent_id}", json_data=data)
 
         console.print("[green]✓ A2A agent updated successfully![/green]")
@@ -128,7 +131,7 @@ def a2a_update(
 
 
 def a2a_delete(
-    agent_id: int = typer.Argument(..., help="Agent ID"),
+    agent_id: str = typer.Argument(..., help="Agent ID"),
     confirm: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ) -> None:
     """Delete an A2A agent."""
@@ -149,13 +152,21 @@ def a2a_delete(
 
 
 def a2a_toggle(
-    agent_id: int = typer.Argument(..., help="Agent ID"),
+    agent_id: str = typer.Argument(..., help="Agent ID"),
 ) -> None:
     """Toggle A2A agent active status."""
     console = get_console()
 
     try:
-        result = make_authenticated_request("POST", f"/a2a/{agent_id}/toggle")
+        current_status = make_authenticated_request("GET", f"/a2a/{agent_id}")
+        assert isinstance(current_status, dict)
+        if current_status["enabled"]:
+            activate = False
+        else:
+            activate = True
+        result = make_authenticated_request("POST", f"/a2a/{agent_id}/toggle", params={"activate": activate})
+        assert isinstance(result, dict)
+        assert result["enabled"] == activate, "Failed to toggle A2A Agent"
         console.print("[green]✓ A2A agent toggled successfully![/green]")
         print_json(result, "A2A Agent Status")
 

@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 # Third-Party
+import click
 import pytest
 import typer
 
@@ -27,6 +28,7 @@ from cforge.commands.resources.a2a import (
     a2a_toggle,
     a2a_update,
 )
+from tests.conftest import patch_functions
 
 
 class TestA2aCommands:
@@ -34,7 +36,7 @@ class TestA2aCommands:
 
     def test_a2a_list_success(self, mock_console) -> None:
         """Test a2a list command."""
-        mock_agents = [{"id": 1, "name": "agent1", "url": "http://example.com", "description": "desc1", "is_active": True}]
+        mock_agents = [{"id": 1, "name": "agent1", "url": "http://example.com", "description": "desc1", "enabled": True}]
 
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.make_authenticated_request", return_value=mock_agents):
@@ -73,7 +75,7 @@ class TestA2aCommands:
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.make_authenticated_request", return_value=mock_agent):
                 with patch("cforge.commands.resources.a2a.print_json"):
-                    a2a_get(agent_id=1)
+                    a2a_get(agent_id="1")
 
     def test_a2a_create_from_file(self, mock_console) -> None:
         """Test a2a create from file."""
@@ -131,27 +133,27 @@ class TestA2aCommands:
             with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
                 with patch("cforge.commands.resources.a2a.make_authenticated_request", return_value=mock_result):
                     with patch("cforge.commands.resources.a2a.print_json"):
-                        a2a_update(agent_id=1, data_file=data_file)
+                        a2a_update(agent_id="1", data_file=data_file)
 
     def test_a2a_update_file_not_found(self, mock_console) -> None:
         """Test a2a update with missing file."""
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with pytest.raises(typer.Exit):
-                a2a_update(agent_id=1, data_file=Path("/nonexistent.json"))
+                a2a_update(agent_id="1", data_file=Path("/nonexistent.json"))
 
     def test_a2a_delete_with_confirmation(self, mock_console) -> None:
         """Test a2a delete with confirmation."""
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.make_authenticated_request"):
                 with patch("cforge.commands.resources.a2a.typer.confirm", return_value=True):
-                    a2a_delete(agent_id=1, confirm=False)
+                    a2a_delete(agent_id="1", confirm=False)
 
     def test_a2a_delete_cancelled(self, mock_console) -> None:
         """Test a2a delete cancelled."""
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.typer.confirm", return_value=False):
                 with pytest.raises(typer.Exit) as exc_info:
-                    a2a_delete(agent_id=1, confirm=False)
+                    a2a_delete(agent_id="1", confirm=False)
 
                 # Note: Exit(0) gets caught by exception handler and converted to Exit(1)
                 assert exc_info.value.exit_code == 1
@@ -160,19 +162,10 @@ class TestA2aCommands:
         """Test a2a delete with --yes flag."""
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.make_authenticated_request"):
-                a2a_delete(agent_id=1, confirm=True)
+                a2a_delete(agent_id="1", confirm=True)
 
         # Should not prompt
         assert not any("confirm" in str(call) for call in mock_console.print.call_args_list)
-
-    def test_a2a_toggle_success(self, mock_console) -> None:
-        """Test a2a toggle command."""
-        mock_result = {"id": 1, "is_active": False}
-
-        with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
-            with patch("cforge.commands.resources.a2a.make_authenticated_request", return_value=mock_result):
-                with patch("cforge.commands.resources.a2a.print_json"):
-                    a2a_toggle(agent_id=1)
 
     def test_a2a_invoke_success(self, mock_console) -> None:
         """Test a2a invoke command."""
@@ -198,11 +191,73 @@ class TestA2aCommands:
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
-                    a2a_get(agent_id=1)
+                    a2a_get(agent_id="1")
 
     def test_a2a_toggle_error(self, mock_console) -> None:
         """Test a2a toggle error handling."""
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
-                    a2a_toggle(agent_id=1)
+                    a2a_toggle(agent_id="1")
+
+
+class TestA2ACommandsIntegration:
+    """Test a2a commands with a real gateway test client."""
+
+    def test_a2a_lifecycle(self, mock_console, authorized_mock_client) -> None:
+        """Test the full CRUD lifecycle of an a2a server.
+
+        NOTE: This test mutates the state of the session gateway!
+        """
+        with patch_functions("cforge.commands.resources.a2a", print_json=None) as mocks:
+
+            # Create a new MCP Server in the gateway
+            a2a_body = {
+                "name": "test-a2a-server",
+                "endpoint_url": "http://foo.bar.com",
+                "description": "A test A2A server",
+            }
+            with patch("cforge.commands.resources.a2a.prompt_for_schema", return_value=a2a_body):
+                a2a_create(None)
+            assert len(mocks.print_json.call_args_list) == 1
+            body = mocks.print_json.call_args[0][0]
+            a2a_id = body["id"]
+            assert body["enabled"]
+            mocks.print_json.reset_mock()
+
+            # Retrieve it and verify
+            a2a_get(a2a_id)
+            assert len(mocks.print_json.call_args_list) == 1
+            body = mocks.print_json.call_args[0][0]
+            assert body["id"] == a2a_id
+            mocks.print_json.reset_mock()
+
+            # Update it
+            update_body = {"description": "A new description"}
+            with patch("cforge.commands.resources.a2a.prompt_for_schema", return_value=update_body):
+                a2a_update(a2a_id, data_file=None)
+            assert len(mocks.print_json.call_args_list) == 1
+            body = mocks.print_json.call_args[0][0]
+            assert body["description"] == update_body["description"]
+            mocks.print_json.reset_mock()
+
+            # Deactivate it
+            a2a_toggle(a2a_id)
+            assert len(mocks.print_json.call_args_list) == 1
+            body = mocks.print_json.call_args[0][0]
+            assert not body["enabled"]
+            mocks.print_json.reset_mock()
+
+            # Re-activate it
+            a2a_toggle(a2a_id)
+            assert len(mocks.print_json.call_args_list) == 1
+            body = mocks.print_json.call_args[0][0]
+            assert body["enabled"]
+            mocks.print_json.reset_mock()
+
+            # Delete it
+            a2a_delete(a2a_id)
+
+            # Verify it's gone
+            with pytest.raises(click.exceptions.Exit):
+                a2a_get(a2a_id)
