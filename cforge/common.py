@@ -252,6 +252,9 @@ def print_table(
 # Structure Guidance
 # ------------------------------------------------------------------------------
 
+# Very unlikely number for any valid int param
+_INT_SENTINEL_DEFAULT = -4231415
+
 
 def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = None, indent: str = "") -> Dict[str, Any]:
     """Interactively prompt user for fields based on a Pydantic schema.
@@ -329,12 +332,11 @@ def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = 
                 data[field_name] = typer.prompt("", default=bool(default) if default else False, type=bool)
 
         elif actual_type is int or str(actual_type) == "int":
-            sentinel_default = -4231415  # Very unlikely number for any valid param
             default_val = default
             if default is None:
-                default_val = "" if is_required else sentinel_default
-            value = typer.prompt(prompt_text, type=int, default=default_val, show_default=default_val not in ["", sentinel_default])
-            if value != sentinel_default:
+                default_val = "" if is_required else _INT_SENTINEL_DEFAULT
+            value = typer.prompt(prompt_text, type=int, default=default_val, show_default=default_val not in ["", _INT_SENTINEL_DEFAULT])
+            if value != _INT_SENTINEL_DEFAULT:
                 data[field_name] = value
 
         elif get_origin(actual_type) is list or str(actual_type).startswith("list"):

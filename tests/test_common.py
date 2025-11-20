@@ -24,6 +24,7 @@ import requests
 
 # First-Party
 from cforge.common import (
+    _INT_SENTINEL_DEFAULT,
     AuthenticationError,
     CLIError,
     get_app,
@@ -330,9 +331,10 @@ class TestPromptForSchema:
             enabled: bool
 
         with patch("typer.confirm", return_value=True):
-            result = prompt_for_schema(TestSchema)
+            with patch("typer.prompt", return_value=True):
+                result = prompt_for_schema(TestSchema)
 
-            assert result["enabled"] is True
+                assert result["enabled"] is True
 
     def test_prompt_with_optional_bool_field_declined(self, mock_console) -> None:
         """Test prompting for optional boolean field that is declined."""
@@ -364,8 +366,8 @@ class TestPromptForSchema:
         class TestSchema(BaseModel):
             count: Optional[int] = None
 
-        # Return empty string to simulate skipping optional field
-        with patch("typer.prompt", return_value=""):
+        # Return sentinel to simulate skipping optional field
+        with patch("typer.prompt", return_value=_INT_SENTINEL_DEFAULT):
             result = prompt_for_schema(TestSchema)
 
             # Field should not be in result when empty
