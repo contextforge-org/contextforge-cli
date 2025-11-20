@@ -52,8 +52,8 @@ def tools_list(
                 print_table(
                     tools,
                     "Tools",
-                    ["id", "name", "description", "gateway_id", "enabled"],
-                    {"gateway_id": "mcp_server_id"},
+                    ["id", "name", "description", "gatewayId", "enabled"],
+                    {"gatewayId": "mcp_server_id"},
                 )
             else:
                 console.print("[yellow]No tools found[/yellow]")

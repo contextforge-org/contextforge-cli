@@ -49,8 +49,8 @@ def prompts_list(
                 print_table(
                     prompts,
                     "Prompts",
-                    ["id", "name", "description", "gateway_id", "enabled"],
-                    {"gateway_id": "mcp_server_id"},
+                    ["id", "name", "description", "gatewayId", "enabled"],
+                    {"gatewayId": "mcp_server_id"},
                 )
             else:
                 console.print("[yellow]No prompts found[/yellow]")
