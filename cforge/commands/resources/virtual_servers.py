@@ -27,6 +27,19 @@ from cforge.common import (
 from mcpgateway.schemas import ServerCreate, ServerUpdate
 
 
+def _fixup_payload(data: dict) -> dict:
+    """There's an inconsistency between IDs in the body for this call and how
+    they're returned in GET responses for the respective resources, so we make
+    sure they're strings here
+    """
+    updated_data = data.copy()
+    if associated_prompts := data.get("associated_prompts"):
+        updated_data["associated_prompts"] = [str(x) for x in associated_prompts]
+    if associated_resources := data.get("associated_resources"):
+        updated_data["associated_resources"] = [str(x) for x in associated_resources]
+    return updated_data
+
+
 def virtual_servers_list(
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
@@ -93,6 +106,7 @@ def virtual_servers_create(
         else:
             data = prompt_for_schema(ServerCreate, prefilled=prefilled if prefilled else None)
 
+        data = _fixup_payload(data)
         result = make_authenticated_request("POST", "/servers", json_data={"server": data})
 
         console.print("[green]✓ Virtual server created successfully![/green]")
@@ -118,6 +132,7 @@ def virtual_servers_update(
         else:
             data = prompt_for_schema(ServerUpdate)
 
+        data = _fixup_payload(data)
         result = make_authenticated_request("PUT", f"/servers/{server_id}", json_data=data)
 
         console.print("[green]✓ Virtual server updated successfully![/green]")
