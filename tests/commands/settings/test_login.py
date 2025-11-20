@@ -19,6 +19,7 @@ import typer
 
 # First-Party
 from cforge.commands.settings.login import login
+from cforge.common import AuthenticationError, make_authenticated_request
 
 
 class TestLoginCommand:
@@ -114,3 +115,24 @@ class TestLoginCommand:
 
         # Verify error message
         assert any("Failed to connect" in str(call) for call in mock_console.print.call_args_list)
+
+
+class TestLoginCommandIntegration:
+    """Test the login command with a real gateway server."""
+
+    def test_login_lifecycle(self, mock_console, mock_client, mock_settings) -> None:
+        """Test the full lifecycle of trying logged out then logging in."""
+
+        with patch("cforge.commands.settings.login.requests", mock_client):
+
+            # Try making an authenticated call (without the saved token)
+            with pytest.raises(AuthenticationError):
+                make_authenticated_request("GET", "/tools")
+
+            # Log in and try again
+            login(
+                email=mock_settings.platform_admin_email,
+                password=mock_settings.platform_admin_password.get_secret_value(),
+                save=True,
+            )
+            make_authenticated_request("GET", "/tools")
