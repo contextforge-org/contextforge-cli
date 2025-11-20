@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 # Third-Party
+import click
 import pytest
 import typer
 
@@ -26,6 +27,7 @@ from cforge.commands.resources.tools import (
     tools_toggle,
     tools_update,
 )
+from tests.conftest import patch_functions
 
 
 class TestToolsCommands:
@@ -59,7 +61,7 @@ class TestToolsCommands:
                 # Verify params
                 call_args = mock_req.call_args
                 assert call_args[1]["params"]["gateway_id"] == "5"
-                assert call_args[1]["params"]["active"] == "true"
+                assert call_args[1]["params"]["active"] is True
 
     def test_tools_list_no_results(self, mock_console) -> None:
         """Test tools list with no results."""
@@ -197,3 +199,70 @@ class TestToolsCommands:
             with patch("cforge.commands.resources.tools.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
                     tools_toggle(tool_id=1)
+
+
+class TestToolsCommandsIntegration:
+    """Test tools commands with a real gateway test client."""
+
+    def test_tools_list_get(self, mock_console, registered_mcp_server) -> None:
+        """Test listing and getting tools from a registered MCP server"""
+        with patch_functions("cforge.commands.resources.tools", get_console=mock_console, print_json=None) as mocks:
+            tools_list(json_output=True, mcp_server_id=None, active_only=False)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            assert isinstance(body, list) and len(body) == 2
+            for prompt in body:
+                mocks.print_json.reset_mock()
+                tools_get(prompt["id"])
+                mocks.print_json.assert_called_once()
+                body = mocks.print_json.call_args[0][0]
+                assert isinstance(body, dict)
+
+    def test_tools_lifecycle(self, mock_console, authorized_mock_client) -> None:
+        """Test the lifecycle of tools created via the API not a server"""
+        tool_body = {"name": "foo", "content": "hi there", "url": "http://test-greet"}
+        with patch_functions(
+            "cforge.commands.resources.tools",
+            get_console=mock_console,
+            print_json=None,
+            prompt_for_schema={"return_value": tool_body},
+        ) as mocks:
+            # Create the resource
+            tools_create(data_file=None)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            tool_id = body["id"]
+            mocks.print_json.reset_mock()
+
+            # Get the tool by id
+            tools_get(tool_id)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            assert body["url"] == tool_body["url"]
+            mocks.print_json.reset_mock()
+
+        update_tool_body = {"name": "foobar"}
+        with patch_functions(
+            "cforge.commands.resources.tools",
+            get_console=mock_console,
+            print_json=None,
+            prompt_for_schema={"return_value": update_tool_body},
+        ) as mocks:
+            # Update the resource
+            tools_update(tool_id, data_file=None)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+            assert body["url"] == tool_body["url"]
+            assert body["name"] == update_tool_body["name"]
+            mocks.print_json.reset_mock()
+            tools_get(tool_id)
+            mocks.print_json.assert_called_once()
+            body = mocks.print_json.call_args[0][0]
+
+            # Delete the resource
+            tools_delete(tool_id)
+            mocks.print_json.reset_mock()
+
+            # Make sure it's gone
+            with pytest.raises(click.exceptions.Exit):
+                tools_get(tool_id)
