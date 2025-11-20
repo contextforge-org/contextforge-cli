@@ -36,7 +36,7 @@ class TestVirtualServersCommands:
 
     def test_virtual_servers_list_success(self, mock_console) -> None:
         """Test virtual-servers list command."""
-        mock_servers = [{"id": 1, "name": "server1", "description": "desc1", "is_active": True}]
+        mock_servers = [{"id": 1, "name": "server1", "description": "desc1", "enabled": True}]
 
         with patch("cforge.commands.resources.virtual_servers.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.virtual_servers.make_authenticated_request", return_value=mock_servers):
@@ -168,7 +168,7 @@ class TestVirtualServersCommands:
 
     def test_virtual_servers_toggle_success(self, mock_console) -> None:
         """Test virtual-servers toggle command."""
-        mock_result = {"id": 1, "is_active": False}
+        mock_result = {"id": 1, "enabled": False}
 
         with patch("cforge.commands.resources.virtual_servers.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.virtual_servers.make_authenticated_request", return_value=mock_result):
