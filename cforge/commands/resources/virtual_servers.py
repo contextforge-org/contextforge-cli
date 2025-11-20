@@ -24,7 +24,7 @@ from cforge.common import (
     print_table,
     prompt_for_schema,
 )
-from mcpgateway.schemas import ServerCreate
+from mcpgateway.schemas import ServerCreate, ServerUpdate
 
 
 def virtual_servers_list(
@@ -104,17 +104,20 @@ def virtual_servers_create(
 
 def virtual_servers_update(
     server_id: int = typer.Argument(..., help="Server ID"),
-    data_file: Path = typer.Argument(..., help="JSON file containing updated server data"),
+    data_file: Optional[Path] = typer.Argument(None, help="JSON file containing updated server data"),
 ) -> None:
     """Update an existing virtual server."""
     console = get_console()
 
     try:
-        if not data_file.exists():
-            console.print(f"[red]File not found: {data_file}[/red]")
-            raise typer.Exit(1)
+        if data_file:
+            if not data_file.exists():
+                console.print(f"[red]File not found: {data_file}[/red]")
+                raise typer.Exit(1)
+            data = json.loads(data_file.read_text())
+        else:
+            data = prompt_for_schema(ServerUpdate)
 
-        data = json.loads(data_file.read_text())
         result = make_authenticated_request("PUT", f"/servers/{server_id}", json_data=data)
 
         console.print("[green]✓ Virtual server updated successfully![/green]")
