@@ -93,7 +93,7 @@ def virtual_servers_create(
         else:
             data = prompt_for_schema(ServerCreate, prefilled=prefilled if prefilled else None)
 
-        result = make_authenticated_request("POST", "/servers", json_data=data)
+        result = make_authenticated_request("POST", "/servers", json_data={"server": data})
 
         console.print("[green]✓ Virtual server created successfully![/green]")
         print_json(result, "Created Virtual Server")
