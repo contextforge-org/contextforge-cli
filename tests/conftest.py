@@ -19,7 +19,7 @@ import urllib3
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable, Generator, List
+from typing import Any, Callable, Generator, List, Union
 from unittest.mock import Mock, patch
 
 # Third-Party
@@ -64,13 +64,13 @@ def patch_everywhere(name: str, **kwargs) -> Generator[List[Any], None, None]:
 
 
 @contextmanager
-def patch_functions(module_path: str, **patches):
+def patch_functions(module_paths: Union[str, List[str]], **patches):
     """Context manager to patch multiple functions in a module.
 
     This eliminates the need for deeply nested `with patch()` blocks in tests.
 
     Args:
-        module_path: The module path (e.g., "cforge.commands.resources.prompts")
+        module_paths: The module path (e.g., "cforge.commands.resources.prompts")
         **patches: Keyword arguments where:
             - key is the function name to patch
             - value is either:
@@ -98,22 +98,24 @@ def patch_functions(module_path: str, **patches):
     """
     patch_contexts = []
     mocks = SimpleNamespace()
+    module_paths = module_paths if isinstance(module_paths, list) else [module_paths]
 
     try:
-        for func_name, config in patches.items():
-            full_path = f"{module_path}.{func_name}"
+        for module_path in module_paths:
+            for func_name, config in patches.items():
+                full_path = f"{module_path}.{func_name}"
 
-            # If config is a dict, use it as patch kwargs
-            # Otherwise, use it as return_value
-            if config is None or isinstance(config, dict):
-                patch_kwargs = config or {}
-            else:
-                patch_kwargs = {"return_value": config}
+                # If config is a dict, use it as patch kwargs
+                # Otherwise, use it as return_value
+                if config is None or isinstance(config, dict):
+                    patch_kwargs = config or {}
+                else:
+                    patch_kwargs = {"return_value": config}
 
-            patch_obj = patch(full_path, **patch_kwargs)
-            mock = patch_obj.__enter__()
-            patch_contexts.append(patch_obj)
-            setattr(mocks, func_name, mock)
+                patch_obj = patch(full_path, **patch_kwargs)
+                mock = patch_obj.__enter__()
+                patch_contexts.append(patch_obj)
+                setattr(mocks, func_name, mock)
 
         yield mocks
     finally:
@@ -161,7 +163,7 @@ def mock_client_login(mock_client: TestClient) -> Generator[None, None, None]:
 
 
 @contextmanager
-def mock_mcp_server_sse(tools: List[Callable], prompts: List[str], resources: List[str]) -> Generator[uvicorn.Config, None, None]:
+def mock_mcp_server_sse(name: str, tools: List[Callable], prompts: List[str], resources: List[str]) -> Generator[dict, None, None]:
     """Manage the context for an ephemeral MCP server with SSE."""
     mcp = FastMCP("Test")
 
@@ -177,7 +179,7 @@ def mock_mcp_server_sse(tools: List[Callable], prompts: List[str], resources: Li
         mcp.resource(f"resource://{resource[:5]}", name=f"resource_{i}")(my_resource)
 
     port = get_open_port()
-    config = uvicorn.Config(mcp.sse_app(), host="localhost", port=port, log_level="error")
+    config = uvicorn.Config(mcp.sse_app(), host="localhost", port=port, log_level="debug")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run)
     try:
@@ -194,10 +196,27 @@ def mock_mcp_server_sse(tools: List[Callable], prompts: List[str], resources: Li
                 break
         else:
             raise RuntimeError("Failed to start MCP server")
-        yield config
+        yield {
+            "url": f"http://localhost:{config.port}/sse",
+            "name": name,
+            "description": "A server for testing",
+        }
     finally:
         server.should_exit = True
         thread.join(timeout=5)
+
+
+@contextmanager
+def register_mcp_server(server_settings: dict, authorized_mock_client: TestClient) -> Generator[dict, None, None]:
+    """Contextmanager to register and unregister an MCP server"""
+    headers = {"Authorization": f"Bearer {authorized_mock_client.settings.mcpgateway_bearer_token}"}
+    result = authorized_mock_client.post("/gateways", json=server_settings, headers=headers)
+    body = result.json()
+    mcp_server_id = body["id"]
+    try:
+        yield body
+    finally:
+        authorized_mock_client.delete(f"/gateways/{mcp_server_id}", headers=headers)
 
 
 # ==============================================================================
@@ -279,25 +298,16 @@ def mock_mcp_server() -> Generator[dict, None, None]:
         return a + b
 
     with mock_mcp_server_sse(
+        name="test-server",
         tools=[hi, add],
         prompts=["Hello world!", "You are a math machine"],
         resources=["addition: 1 + 1 = 2"],
     ) as server_cfg:
-        yield {
-            "url": f"http://localhost:{server_cfg.port}/sse",
-            "name": "test-server",
-            "description": "A server for testing",
-        }
+        yield server_cfg
 
 
 @pytest.fixture
 def registered_mcp_server(mock_mcp_server, authorized_mock_client) -> Generator[dict, None, None]:
     """Test-level fixture to register the mock server and unregister at the end"""
-    headers = {"Authorization": f"Bearer {authorized_mock_client.settings.mcpgateway_bearer_token}"}
-    result = authorized_mock_client.post("/gateways", json=mock_mcp_server, headers=headers)
-    body = result.json()
-    mcp_server_id = body["id"]
-    try:
-        yield body
-    finally:
-        authorized_mock_client.delete(f"/gateways/{mcp_server_id}", headers=headers)
+    with register_mcp_server(mock_mcp_server, authorized_mock_client) as mcp_server:
+        yield mcp_server

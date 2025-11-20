@@ -11,13 +11,17 @@ Tests for the virtual-servers commands.
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 # Third-Party
+import click
 import pytest
 import typer
 
 # First-Party
+from cforge.commands.resources.prompts import prompts_list
+from cforge.commands.resources.resources import resources_list
+from cforge.commands.resources.tools import tools_list
 from cforge.commands.resources.virtual_servers import (
     virtual_servers_create,
     virtual_servers_delete,
@@ -29,6 +33,7 @@ from cforge.commands.resources.virtual_servers import (
     virtual_servers_tools,
     virtual_servers_update,
 )
+from tests.conftest import mock_mcp_server_sse, patch_functions, register_mcp_server
 
 
 class TestVirtualServersCommands:
@@ -290,3 +295,121 @@ class TestVirtualServersCommands:
             with patch("cforge.commands.resources.virtual_servers.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
                     virtual_servers_prompts(server_id=1, json_output=False)
+
+
+class TestVirtualpServersCommandsIntegration:
+    """Test virtual-servers commands with a real gateway test client."""
+
+    def test_virtual_servers_lifecycle(self, authorized_mock_client, mock_console, registered_mcp_server) -> None:
+        """Test the full lifecycle of virtual servers"""
+
+        # Run a second MCP server
+
+        def mul(a: float, b: float) -> float:
+            return a * b
+
+        # NOTE: resources need to have unique URIs which are inferred by the
+        # first word
+        with mock_mcp_server_sse(
+            name="other-server",
+            tools=[mul],
+            prompts=["other prompt"],
+            resources=["mul: 2*3=6", "mul-other: 4*5=20"],
+        ) as mul_server_cfg:
+            mock_print_json = MagicMock()
+            with register_mcp_server(mul_server_cfg, authorized_mock_client):
+                with patch_functions(
+                    module_paths=[
+                        "cforge.commands.resources.virtual_servers",
+                        "cforge.commands.resources.tools",
+                        "cforge.commands.resources.prompts",
+                        "cforge.commands.resources.resources",
+                    ],
+                    get_console=mock_console,
+                    print_json={"new": mock_print_json},
+                ):
+
+                    # Validate no current virtual servers
+                    virtual_servers_list(json_output=True)
+                    mock_print_json.assert_called_once()
+                    body = mock_print_json.call_args[0][0]
+                    assert isinstance(body, list) and len(body) == 0
+                    mock_print_json.reset_mock()
+
+                    # Get tool IDs for "mul" and "add"
+                    tools_list(json_output=True, mcp_server_id=None, active_only=False)
+                    mock_print_json.assert_called_once()
+                    body = mock_print_json.call_args[0][0]
+                    assert isinstance(body, list) and len(body) == 3
+                    mul_tool = [tool for tool in body if tool["originalName"] == "mul"]
+                    assert len(mul_tool) == 1
+                    mul_tool_id = mul_tool[0]["id"]
+                    add_tool = [tool for tool in body if tool["originalName"] == "add"]
+                    assert len(add_tool) == 1
+                    add_tool_id = add_tool[0]["id"]
+                    tool_ids = [mul_tool_id, add_tool_id]
+                    mock_print_json.reset_mock()
+
+                    # Get prompt IDs for a subset of prompts
+                    prompts_list(json_output=True, mcp_server_id=None)
+                    mock_print_json.assert_called_once()
+                    body = mock_print_json.call_args[0][0]
+                    assert isinstance(body, list) and len(body) == 3
+                    prompt_ids = [p["id"] for p in body[:2]]
+                    mock_print_json.reset_mock()
+
+                    # Get resource IDs
+                    resources_list(json_output=True, mcp_server_id=None)
+                    mock_print_json.assert_called_once()
+                    body = mock_print_json.call_args[0][0]
+                    assert isinstance(body, list) and len(body) == 3
+                    resource_ids = [r["id"] for r in body[:2]]
+                    mock_print_json.reset_mock()
+
+                    # Create the virtual server
+                    virtual_server_body = {
+                        "name": "test-vs",
+                        "description": "Test Virtual Server",
+                        "associated_tools": tool_ids,
+                        "associated_prompts": prompt_ids,
+                        "associated_resources": resource_ids,
+                    }
+                    with patch_functions(
+                        "cforge.commands.resources.virtual_servers",
+                        prompt_for_schema={"return_value": virtual_server_body},
+                    ):
+                        virtual_servers_create(data_file=None, name=None, description=None)
+                    mock_print_json.assert_called_once()
+                    body = mock_print_json.call_args[0][0]
+                    virtual_server_id = body["id"]
+                    mock_print_json.reset_mock()
+
+                    # Get the virtual server
+                    virtual_servers_get(virtual_server_id)
+                    mock_print_json.assert_called_once()
+                    body = mock_print_json.call_args[0][0]
+                    assert body["id"] == virtual_server_id
+                    mock_print_json.reset_mock()
+
+                    # Update the virtual server
+                    update_body = {
+                        "associated_resources": resource_ids[:1],
+                    }
+                    with patch_functions(
+                        "cforge.commands.resources.virtual_servers",
+                        prompt_for_schema={"return_value": update_body},
+                    ):
+                        virtual_servers_update(data_file=None, server_id=virtual_server_id)
+                    mock_print_json.assert_called_once()
+                    body = mock_print_json.call_args[0][0]
+                    assert body["id"] == virtual_server_id
+                    assert body["associatedResources"] == update_body["associated_resources"]
+                    mock_print_json.reset_mock()
+
+                    # Delete the virtual server
+                    virtual_servers_delete(virtual_server_id, confirm=True)
+                    mock_print_json.reset_mock()
+
+                    # Fetch and make sure it's gone
+                    with pytest.raises(click.exceptions.Exit):
+                        virtual_servers_get(virtual_server_id)
