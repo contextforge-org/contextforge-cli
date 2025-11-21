@@ -335,9 +335,14 @@ def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = 
             default_val = default
             if default is None:
                 default_val = "" if is_required else _INT_SENTINEL_DEFAULT
-            value = typer.prompt(prompt_text, type=int, default=default_val, show_default=default_val not in ["", _INT_SENTINEL_DEFAULT])
+            console.print(f"{formatted_indent}{prompt_text}", end="")
+            value = typer.prompt("", type=int, default=default_val, show_default=default_val not in ["", _INT_SENTINEL_DEFAULT])
             if value != _INT_SENTINEL_DEFAULT:
                 data[field_name] = value
+
+        elif isinstance(actual_type, type) and issubclass(actual_type, BaseModel):
+            console.print(f"{formatted_indent}[yellow]{prompt_text}[/yellow]")
+            data[field_name] = prompt_for_schema(actual_type, indent=next_indent)
 
         elif get_origin(actual_type) is list or str(actual_type).startswith("list"):
             list_type = get_args(actual_type)[0]

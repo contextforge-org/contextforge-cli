@@ -9,7 +9,7 @@ Tests for common utility functions.
 
 # Standard
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from unittest.mock import Mock, patch
 import stat
 import tempfile
@@ -395,6 +395,81 @@ class TestPromptForSchema:
 
             # Empty input for list should not add the field
             assert "tags" not in result or result.get("tags") is None
+
+    def test_prompt_dict_str_str(self, mock_console) -> None:
+        """Test prompting for a string to string dict"""
+
+        class TestSchema(BaseModel):
+            key: Dict[str, str]
+
+        with patch("typer.confirm", side_effect=["y", "y", ""]), patch("typer.prompt", side_effect=["k1", "v1", "k2", "v2"]):
+            result = prompt_for_schema(TestSchema)
+
+            # Empty input for list should not add the field
+            assert result == {
+                "key": {"k1": "v1", "k2": "v2"},
+            }
+
+    def test_prompt_with_nested_dicts(self, mock_console) -> None:
+        """Test prompting for a nested dict with dict values"""
+
+        class SubSchema(BaseModel):
+            num: int
+
+        class TestSchema(BaseModel):
+            key: Dict[str, Any]
+            sub: SubSchema
+            sub_dict: Dict[str, SubSchema]
+
+        with patch("typer.confirm", side_effect=["y", "y", "", "y", ""]), patch("typer.prompt", side_effect=["k1", '{"foo": 1}', "k2", "[1, 2, 3]", 42, "a-num", 123]):
+            result = prompt_for_schema(TestSchema)
+
+            # Empty input for list should not add the field
+            assert result == {
+                "key": {"k1": {"foo": 1}, "k2": [1, 2, 3]},
+                "sub": {"num": 42},
+                "sub_dict": {"a-num": {"num": 123}},
+            }
+
+    def test_prompt_list_of_sub_models(self, mock_console) -> None:
+        """Test prompting for a list of sub pydantic models"""
+
+        class SubSchema(BaseModel):
+            num: int
+
+        class TestSchema(BaseModel):
+            nums: List[SubSchema]
+
+        with patch("typer.confirm", side_effect=["y", "y", ""]), patch("typer.prompt", side_effect=[1, 2]):
+            result = prompt_for_schema(TestSchema)
+
+            # Empty input for list should not add the field
+            assert result == {"nums": [{"num": 1}, {"num": 2}]}
+
+    def test_prompt_with_default(self, mock_console) -> None:
+        """Test prompting with defaults and make sure prompt string added."""
+
+        class TestSchema(BaseModel):
+            name: str = "foobar"
+            some_val: int = 42
+
+        with patch("typer.prompt", side_effect=["", ""]) as prompt_mock:
+            prompt_for_schema(TestSchema)
+            assert prompt_mock.call_count == 2
+            assert prompt_mock.call_args_list[0][1]["default"] == "foobar"
+            assert prompt_mock.call_args_list[1][1]["default"] == 42
+            assert any("foobar" in call[0][0] for call in mock_console.print.call_args_list)
+            assert any("42" in call[0][0] for call in mock_console.print.call_args_list)
+
+    def test_prompt_missing_required_string(self, mock_console) -> None:
+        """Test that an exception is raised if a required string is unset."""
+
+        class TestSchema(BaseModel):
+            foo: str
+
+        with patch("typer.prompt", return_value=""):
+            with pytest.raises(CLIError):
+                prompt_for_schema(TestSchema)
 
 
 class TestTokenFilePermissions:
