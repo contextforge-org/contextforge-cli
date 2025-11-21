@@ -49,8 +49,8 @@ def resources_list(
                 print_table(
                     resources,
                     "Resources",
-                    ["id", "name", "uri", "description", "gatewayId", "enabled"],
-                    {"gatewayId": "mcp_server_id"},
+                    ["id", "name", "uri", "description", "size", "isActive"],
+                    {"isActive": "enabled"},
                 )
             else:
                 console.print("[yellow]No resources found[/yellow]")

@@ -54,7 +54,12 @@ def virtual_servers_list(
         else:
             servers = result if isinstance(result, list) else [result]
             if servers:
-                print_table(servers, "Virtual Servers", ["id", "name", "description", "enabled"])
+                print_table(
+                    servers,
+                    "Virtual Servers",
+                    ["id", "name", "description", "isActive"],
+                    {"isActive": "enabled"},
+                )
             else:
                 console.print("[yellow]No virtual servers found[/yellow]")
 
