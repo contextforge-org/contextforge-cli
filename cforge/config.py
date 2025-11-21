@@ -8,21 +8,41 @@ CLI-specific superset of core settings
 """
 
 # Standard
+from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, Self
+from typing import Generator, Optional, Self
+import os
 
 # Third-Party
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 # First-Party
 from mcpgateway.config import Settings
+from mcpgateway.config import get_settings as cf_get_settings
+
+
+HOME_DIR_NAME = ".contextforge"
+DEFAULT_HOME = Path.home() / HOME_DIR_NAME
+
+
+@contextmanager
+def _chdir(path: Path) -> Generator[None, None, None]:
+    """Change the current working directory to the given path for the duration
+    of the context
+    """
+    cwd = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(cwd)
 
 
 class CLISettings(Settings):
     """CLI-specific superset of core settings."""
 
-    contextforge_home: Path = Field(default_factory=lambda: Path.home() / ".contextforge")
+    contextforge_home: Path = DEFAULT_HOME
 
     @model_validator(mode="after")
     def _set_database_url_default(self) -> Self:
@@ -46,4 +66,29 @@ def get_settings() -> CLISettings:
     Returns:
         CLISettings: The settings instance.
     """
-    return CLISettings()
+
+    # Figure out the home directory from the env or default
+    # NOTE: This duplicates the source of truth for the env var slightly so that
+    #   we can use home as the source for the .env file as a 2-phase init.
+    home = Path(os.getenv("CONTEXTFORGE_HOME", DEFAULT_HOME))
+    with _chdir(home):
+
+        settings = CLISettings(client_mode=True)
+
+        # Explicitly instantiate the singleton in the base library so all of the
+        # libraries there use the override values
+        cf_settings = cf_get_settings(client_mode=True)
+        cf_settings.database_url = settings.database_url
+
+    return settings
+
+
+def set_serve_settings() -> None:
+    """Reset the settings singleton to be server-side. This should only be used
+    for server-side commands.
+    """
+    cforge_settings = get_settings()
+    with _chdir(cforge_settings.contextforge_home):
+        cf_get_settings.cache_clear()
+        cf_settings = cf_get_settings()
+        cf_settings.database_url = cforge_settings.database_url

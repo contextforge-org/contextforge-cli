@@ -14,12 +14,17 @@ import os
 import typer
 import uvicorn
 
+# First-Party
+from cforge.config import get_settings, set_serve_settings
+
 # ---------------------------------------------------------------------------
 # Configuration defaults
 # ---------------------------------------------------------------------------
+settings = get_settings()
+
 DEFAULT_APP = "mcpgateway.main:app"
-DEFAULT_HOST = os.getenv("MCG_HOST", "127.0.0.1")
-DEFAULT_PORT = int(os.getenv("MCG_PORT", "4444"))
+DEFAULT_HOST = os.getenv("MCG_HOST", settings.host)
+DEFAULT_PORT = int(os.getenv("MCG_PORT", settings.port))
 
 
 def serve(
@@ -33,6 +38,7 @@ def serve(
 
     This is the main server command that runs the FastAPI application.
     """
+    set_serve_settings()
     uvicorn.run(
         DEFAULT_APP,
         host=host,
