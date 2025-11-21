@@ -83,7 +83,7 @@ def get_settings() -> CLISettings:
     return settings
 
 
-def set_serve_settings() -> None:
+def set_serve_settings(**kwargs) -> None:
     """Reset the settings singleton to be server-side. This should only be used
     for server-side commands.
     """
@@ -92,3 +92,5 @@ def set_serve_settings() -> None:
         cf_get_settings.cache_clear()
         cf_settings = cf_get_settings()
         cf_settings.database_url = cforge_settings.database_url
+        for k, v in kwargs.items():
+            setattr(cf_settings, k, v)
