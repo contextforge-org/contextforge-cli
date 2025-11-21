@@ -67,7 +67,7 @@ class TestTokenManagement:
         token_file = get_token_file()
         assert isinstance(token_file, Path)
         assert str(token_file).endswith("token")
-        assert token_file.parent == mock_settings.mcpg_home
+        assert token_file.parent == mock_settings.contextforge_home
 
     def test_save_and_load_token(self) -> None:
         """Test saving and loading a token."""

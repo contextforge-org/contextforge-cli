@@ -20,7 +20,7 @@ class TestConfig:
         assert settings is not None
         assert hasattr(settings, "host")
         assert hasattr(settings, "port")
-        assert hasattr(settings, "mcpg_home")
+        assert hasattr(settings, "contextforge_home")
 
     def test_get_settings_singleton(self) -> None:
         """Test that get_settings returns the same instance."""

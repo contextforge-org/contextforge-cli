@@ -18,7 +18,7 @@ from cforge.common import get_console, get_settings, get_token_file, save_token
 def login(
     email: str = typer.Option(..., "--email", "-e", prompt=True, help="Email for authentication"),
     password: str = typer.Option(..., "--password", "-p", prompt=True, hide_input=True, help="Password for authentication"),
-    save: bool = typer.Option(True, "--save/--no-save", help="Save token to mcpg_home for future use"),
+    save: bool = typer.Option(True, "--save/--no-save", help="Save token to contextforge_home for future use"),
 ) -> None:
     """Authenticate with the MCP Gateway and obtain a token.
 
@@ -47,7 +47,7 @@ def login(
         console.print("[green]✓ Login successful![/green]")
 
         if save:
-            # Save to mcpg_home/token file
+            # Save to contextforge_home/token file
             save_token(token)
             token_file = get_token_file()
             console.print(f"[green]✓ Token saved to {token_file}[/green]")

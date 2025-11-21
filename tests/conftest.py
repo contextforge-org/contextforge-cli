@@ -282,7 +282,7 @@ def authorized_mock_client(mock_client) -> Generator[None, None, None]:
 def mock_settings() -> Generator[CLISettings, None, None]:
     """Provide a context manager for mocking settings."""
     with tempfile.TemporaryDirectory(prefix="cforge_") as tmpdir:
-        settings = CLISettings(mcpg_home=Path(tmpdir))
+        settings = CLISettings(contextforge_home=Path(tmpdir))
         with patch_everywhere("get_settings", return_value=settings):
             yield settings
 

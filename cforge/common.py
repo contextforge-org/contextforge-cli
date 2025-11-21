@@ -95,17 +95,17 @@ def handle_exception(exception: Exception) -> None:
 
 
 def get_token_file() -> Path:
-    """Get the path to the token file in mcpg_home.
+    """Get the path to the token file in contextforge_home.
 
     Returns:
         Path to the token file
     """
-    token_file = get_settings().mcpg_home / "token"
+    token_file = get_settings().contextforge_home / "token"
     return token_file
 
 
 def save_token(token: str) -> None:
-    """Save authentication token to mcpg_home/token file.
+    """Save authentication token to contextforge_home/token file.
 
     Args:
         token: The JWT token to save
@@ -118,7 +118,7 @@ def save_token(token: str) -> None:
 
 
 def load_token() -> Optional[str]:
-    """Load authentication token from mcpg_home/token file.
+    """Load authentication token from contextforge_home/token file.
 
     Returns:
         Token string if found, None otherwise
@@ -134,7 +134,7 @@ def get_auth_token() -> Optional[str]:
 
     Priority:
     1. MCPGATEWAY_BEARER_TOKEN environment variable
-    2. Stored token in mcpg_home/token file
+    2. Stored token in contextforge_home/token file
     3. Basic auth from settings
 
     Returns:
