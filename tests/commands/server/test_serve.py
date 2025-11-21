@@ -9,9 +9,15 @@ Tests for the serve command.
 
 # Standard
 from unittest.mock import patch
+import threading
+import time
+
+# Third-Party
+import requests
 
 # First-Party
 from cforge.commands.server.serve import serve
+from tests.conftest import get_open_port
 
 
 class TestServeCommand:
@@ -41,3 +47,37 @@ class TestServeCommand:
             mock_run.assert_called_once()
             _, kwargs = mock_run.call_args
             assert kwargs.get("reload") is True
+
+
+class TestServeCommandIntegration:
+    """Integration tests for the serve command"""
+
+    def test_serve_starts_and_responds(self, mock_settings):
+        """Run the ``serve`` command and verify a simple request succeeds.
+
+        The server is started in a daemon thread; the test polls the ``/health``
+        endpoint until it receives a ``200`` response or times out.
+        """
+        port = get_open_port()
+
+        # Start the server in a background thread. ``daemon=True`` ensures the
+        # thread does not block process exit.
+        server_thread = threading.Thread(
+            target=serve,
+            kwargs={"host": "127.0.0.1", "port": port, "reload": False, "workers": 1, "log_level": "error"},
+            daemon=True,
+        )
+        server_thread.start()
+
+        # Poll the server until it is ready.
+        deadline = time.time() + 5.0
+        while True:
+            try:
+                resp = requests.get(f"http://127.0.0.1:{port}/health", timeout=0.5)
+                if resp.status_code == 200:
+                    return
+            except Exception:
+                pass
+            if time.time() > deadline:
+                raise AssertionError("Server failed to start within timeout")
+            time.sleep(0.01)
