@@ -28,13 +28,14 @@ from mcpgateway.schemas import A2AAgentCreate, A2AAgentUpdate
 
 
 def a2a_list(
+    active_only: bool = typer.Option(False, "--active-only", help="Show only active agents"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List all A2A agents."""
     console = get_console()
 
     try:
-        result = make_authenticated_request("GET", "/a2a")
+        result = make_authenticated_request("GET", "/a2a", params={"include_inactive": not active_only})
 
         if json_output:
             print_json(result, "A2A Agents")

@@ -28,13 +28,14 @@ from mcpgateway.schemas import GatewayCreate, GatewayUpdate
 
 
 def mcp_servers_list(
+    active_only: bool = typer.Option(False, "--active-only", help="Show only active MCP servers"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List all MCP server peers."""
     console = get_console()
 
     try:
-        result = make_authenticated_request("GET", "/gateways")
+        result = make_authenticated_request("GET", "/gateways", params={"include_inactive": not active_only})
 
         if json_output:
             print_json(result, "MCP Servers")

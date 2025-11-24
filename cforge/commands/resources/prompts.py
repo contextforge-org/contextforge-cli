@@ -29,13 +29,14 @@ from mcpgateway.schemas import PromptCreate, PromptUpdate
 
 def prompts_list(
     mcp_server_id: Optional[str] = typer.Option(None, "--mcp-server-id", "-m", help="Filter by MCP Server ID"),
+    active_only: bool = typer.Option(False, "--active-only", help="Show only active prompts"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List all prompts in the gateway."""
     console = get_console()
 
     try:
-        params: Dict[str, Any] = {}
+        params: Dict[str, Any] = {"include_inactive": not active_only}
         if mcp_server_id:
             params["gateway_id"] = mcp_server_id
 
@@ -165,7 +166,16 @@ def prompts_toggle(
     console = get_console()
 
     try:
-        result = make_authenticated_request("POST", f"/prompts/{prompt_id}/toggle")
+        current_status = make_authenticated_request("GET", "/prompts", params={"include_inactive": True})
+        assert isinstance(current_status, list)
+        this_status = [res for res in current_status if res.get("id") == prompt_id]
+        if not this_status:
+            console.print(f"[red]Prompt not found: {prompt_id}[/red]")
+            raise typer.Exit(1)
+        assert len(this_status) == 1, "Multiple prompts with same ID found"
+        assert isinstance(this_status[0], dict)
+        activate = not this_status[0].get("isActive")
+        result = make_authenticated_request("POST", f"/prompts/{prompt_id}/toggle", params={"activate": activate})
         console.print("[green]✓ Prompt toggled successfully![/green]")
         print_json(result, "Prompt Status")
 

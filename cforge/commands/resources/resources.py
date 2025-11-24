@@ -29,13 +29,14 @@ from mcpgateway.schemas import ResourceCreate, ResourceUpdate
 
 def resources_list(
     mcp_server_id: Optional[str] = typer.Option(None, "--mcp-server-id", "-m", help="Filter by MCP Server ID"),
+    active_only: bool = typer.Option(False, "--active-only", help="Show only active resources"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List all resources in the gateway."""
     console = get_console()
 
     try:
-        params: Dict[str, Any] = {}
+        params: Dict[str, Any] = {"include_inactive": not active_only}
         if mcp_server_id:
             params["gateway_id"] = mcp_server_id
 
@@ -168,20 +169,15 @@ def resources_toggle(
     console = get_console()
 
     try:
-        current_status = make_authenticated_request("GET", "/resources")
+        current_status = make_authenticated_request("GET", "/resources", params={"include_inactive": True})
         assert isinstance(current_status, list)
         this_status = [res for res in current_status if res.get("id") == resource_id]
-        # NOTE: If the resources was previously deactivated, it will not show up
-        # in a list call, but will still be in the database. The only way to
-        # distinguish between this and a bad resource ID is to do a separate GET
-        # call (which will not return the active status), but the simpler way is
-        # to just try toggling and letting a 404 error be raised.
         if not this_status:
-            activate = True
-        else:
-            assert len(this_status) == 1, "Multiple resources with same ID found"
-            assert isinstance(this_status[0], dict)
-            activate = not this_status[0].get("isActive")
+            console.print(f"[red]Resource not found: {resource_id}[/red]")
+            raise typer.Exit(1)
+        assert len(this_status) == 1, "Multiple resources with same ID found"
+        assert isinstance(this_status[0], dict)
+        activate = not this_status[0].get("isActive")
         result = make_authenticated_request("POST", f"/resources/{resource_id}/toggle", params={"activate": activate})
         console.print("[green]✓ Resource toggled successfully![/green]")
         print_json(result, "Resource Status")

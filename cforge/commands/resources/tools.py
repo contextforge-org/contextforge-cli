@@ -10,7 +10,7 @@ CLI command group: tools
 # Standard
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 # Third-Party
 import typer
@@ -36,11 +36,9 @@ def tools_list(
     console = get_console()
 
     try:
-        params: dict[str, Any] = {}
+        params: Dict[str, Any] = {"include_inactive": not active_only}
         if mcp_server_id:
             params["gateway_id"] = mcp_server_id
-        if active_only:
-            params["active"] = True
 
         result = make_authenticated_request("GET", "/tools", params=params)
 
@@ -63,7 +61,7 @@ def tools_list(
 
 
 def tools_get(
-    tool_id: int = typer.Argument(..., help="Tool ID"),
+    tool_id: str = typer.Argument(..., help="Tool ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """Get details of a specific tool."""
@@ -117,7 +115,7 @@ def tools_create(
 
 
 def tools_update(
-    tool_id: int = typer.Argument(..., help="Tool ID"),
+    tool_id: str = typer.Argument(..., help="Tool ID"),
     data_file: Optional[Path] = typer.Argument(None, help="JSON file containing updated tool data"),
 ) -> None:
     """Update an existing tool."""
@@ -142,7 +140,7 @@ def tools_update(
 
 
 def tools_delete(
-    tool_id: int = typer.Argument(..., help="Tool ID"),
+    tool_id: str = typer.Argument(..., help="Tool ID"),
     confirm: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ) -> None:
     """Delete a tool."""
@@ -163,13 +161,19 @@ def tools_delete(
 
 
 def tools_toggle(
-    tool_id: int = typer.Argument(..., help="Tool ID"),
+    tool_id: str = typer.Argument(..., help="Tool ID"),
 ) -> None:
     """Toggle tool active status."""
     console = get_console()
 
     try:
-        result = make_authenticated_request("POST", f"/tools/{tool_id}/toggle")
+        current_status = make_authenticated_request("GET", f"/tools/{tool_id}")
+        assert isinstance(current_status, dict)
+        if current_status["enabled"]:
+            activate = False
+        else:
+            activate = True
+        result = make_authenticated_request("POST", f"/tools/{tool_id}/toggle", params={"activate": activate})
         console.print("[green]✓ Tool toggled successfully![/green]")
         print_json(result, "Tool Status")
 

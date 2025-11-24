@@ -41,13 +41,14 @@ def _fixup_payload(data: dict) -> dict:
 
 
 def virtual_servers_list(
+    active_only: bool = typer.Option(False, "--active-only", help="Show only active virtual servers"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List all virtual servers."""
     console = get_console()
 
     try:
-        result = make_authenticated_request("GET", "/servers")
+        result = make_authenticated_request("GET", "/servers", params={"include_inactive": not active_only})
 
         if json_output:
             print_json(result, "Virtual Servers")
@@ -68,7 +69,7 @@ def virtual_servers_list(
 
 
 def virtual_servers_get(
-    server_id: int = typer.Argument(..., help="Server ID"),
+    server_id: str = typer.Argument(..., help="Server ID"),
 ) -> None:
     """Get details of a specific virtual server."""
     try:
@@ -122,7 +123,7 @@ def virtual_servers_create(
 
 
 def virtual_servers_update(
-    server_id: int = typer.Argument(..., help="Server ID"),
+    server_id: str = typer.Argument(..., help="Server ID"),
     data_file: Optional[Path] = typer.Argument(None, help="JSON file containing updated server data"),
 ) -> None:
     """Update an existing virtual server."""
@@ -148,7 +149,7 @@ def virtual_servers_update(
 
 
 def virtual_servers_delete(
-    server_id: int = typer.Argument(..., help="Server ID"),
+    server_id: str = typer.Argument(..., help="Server ID"),
     confirm: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ) -> None:
     """Delete a virtual server."""
@@ -169,13 +170,20 @@ def virtual_servers_delete(
 
 
 def virtual_servers_toggle(
-    server_id: int = typer.Argument(..., help="Server ID"),
+    server_id: str = typer.Argument(..., help="Server ID"),
 ) -> None:
     """Toggle virtual server active status."""
     console = get_console()
 
     try:
-        result = make_authenticated_request("POST", f"/servers/{server_id}/toggle")
+        current_status = make_authenticated_request("GET", f"/servers/{server_id}")
+        assert isinstance(current_status, dict)
+        if current_status["isActive"]:
+            activate = False
+        else:
+            activate = True
+        result = make_authenticated_request("POST", f"/servers/{server_id}/toggle", params={"activate": activate})
+        assert isinstance(result, dict)
         console.print("[green]✓ Virtual server toggled successfully![/green]")
         print_json(result, "Virtual Server Status")
 
@@ -184,7 +192,7 @@ def virtual_servers_toggle(
 
 
 def virtual_servers_tools(
-    server_id: int = typer.Argument(..., help="Server ID"),
+    server_id: str = typer.Argument(..., help="Server ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List tools available in a virtual server."""
@@ -207,7 +215,7 @@ def virtual_servers_tools(
 
 
 def virtual_servers_resources(
-    server_id: int = typer.Argument(..., help="Server ID"),
+    server_id: str = typer.Argument(..., help="Server ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List resources available in a virtual server."""
@@ -230,7 +238,7 @@ def virtual_servers_resources(
 
 
 def virtual_servers_prompts(
-    server_id: int = typer.Argument(..., help="Server ID"),
+    server_id: str = typer.Argument(..., help="Server ID"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """List prompts available in a virtual server."""
