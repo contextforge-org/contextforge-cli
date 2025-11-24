@@ -168,7 +168,21 @@ def resources_toggle(
     console = get_console()
 
     try:
-        result = make_authenticated_request("POST", f"/resources/{resource_id}/toggle")
+        current_status = make_authenticated_request("GET", "/resources")
+        assert isinstance(current_status, list)
+        this_status = [res for res in current_status if res.get("id") == resource_id]
+        # NOTE: If the resources was previously deactivated, it will not show up
+        # in a list call, but will still be in the database. The only way to
+        # distinguish between this and a bad resource ID is to do a separate GET
+        # call (which will not return the active status), but the simpler way is
+        # to just try toggling and letting a 404 error be raised.
+        if not this_status:
+            activate = True
+        else:
+            assert len(this_status) == 1, "Multiple resources with same ID found"
+            assert isinstance(this_status[0], dict)
+            activate = not this_status[0].get("isActive")
+        result = make_authenticated_request("POST", f"/resources/{resource_id}/toggle", params={"activate": activate})
         console.print("[green]✓ Resource toggled successfully![/green]")
         print_json(result, "Resource Status")
 
