@@ -347,3 +347,83 @@ class TestMcpServersCommandsIntegration:
             # Verify it's gone
             with pytest.raises(click.exceptions.Exit):
                 mcp_servers_get(mcp_server_id)
+
+    def test_mcp_servers_list_active_only_integration(self, mock_console, authorized_mock_client, mock_mcp_server) -> None:
+        """Test --active-only flag filters correctly with real server."""
+        with patch_functions("cforge.commands.resources.mcp_servers", print_json=None) as mocks:
+            # Create a new MCP Server
+            with patch("cforge.commands.resources.mcp_servers.prompt_for_schema", return_value=mock_mcp_server):
+                mcp_servers_create(None)
+            mcp_server_id = mocks.print_json.call_args[0][0]["id"]
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should include it (starts enabled)
+            mcp_servers_list(active_only=True, json_output=True)
+            active_servers = mocks.print_json.call_args[0][0]
+            assert any(s["id"] == mcp_server_id for s in active_servers), "Enabled server should appear in active-only list"
+            mocks.print_json.reset_mock()
+
+            # Disable it
+            mcp_servers_toggle(mcp_server_id)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should NOT include it
+            mcp_servers_list(active_only=True, json_output=True)
+            active_servers = mocks.print_json.call_args[0][0]
+            assert not any(s["id"] == mcp_server_id for s in active_servers), "Disabled server should NOT appear in active-only list"
+            mocks.print_json.reset_mock()
+
+            # List with active_only=False should include it
+            mcp_servers_list(active_only=False, json_output=True)
+            all_servers = mocks.print_json.call_args[0][0]
+            assert any(s["id"] == mcp_server_id for s in all_servers), "Disabled server should appear in full list"
+            mocks.print_json.reset_mock()
+
+            # Re-enable it
+            mcp_servers_toggle(mcp_server_id)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should include it again
+            mcp_servers_list(active_only=True, json_output=True)
+            active_servers = mocks.print_json.call_args[0][0]
+            assert any(s["id"] == mcp_server_id for s in active_servers), "Re-enabled server should appear in active-only list"
+
+            # Cleanup
+            mcp_servers_delete(mcp_server_id)
+
+    def test_mcp_servers_toggle_status_detection_integration(self, mock_console, authorized_mock_client, mock_mcp_server) -> None:
+        """Test toggle command detects current status correctly with real server."""
+        with patch_functions("cforge.commands.resources.mcp_servers", print_json=None, get_console=mock_console) as mocks:
+            # Create a new MCP Server (starts enabled)
+            with patch("cforge.commands.resources.mcp_servers.prompt_for_schema", return_value=mock_mcp_server):
+                mcp_servers_create(None)
+            mcp_server_id = mocks.print_json.call_args[0][0]["id"]
+            mocks.print_json.reset_mock()
+
+            # Get initial status (should be enabled)
+            mcp_servers_get(mcp_server_id)
+            initial_status = mocks.print_json.call_args[0][0]["enabled"]
+            assert initial_status is True, "New server should start enabled"
+            mocks.print_json.reset_mock()
+
+            # Toggle (should detect enabled and switch to disabled)
+            mcp_servers_toggle(mcp_server_id)
+            mocks.print_json.reset_mock()
+
+            # Verify status changed by getting it again
+            mcp_servers_get(mcp_server_id)
+            current_status = mocks.print_json.call_args[0][0]["enabled"]
+            assert current_status is False, "Server should now be disabled"
+            mocks.print_json.reset_mock()
+
+            # Toggle again (should detect disabled and switch to enabled)
+            mcp_servers_toggle(mcp_server_id)
+            mocks.print_json.reset_mock()
+
+            # Verify status changed back
+            mcp_servers_get(mcp_server_id)
+            final_status = mocks.print_json.call_args[0][0]["enabled"]
+            assert final_status is True, "Server should be enabled again"
+
+            # Cleanup
+            mcp_servers_delete(mcp_server_id)

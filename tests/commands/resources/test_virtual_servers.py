@@ -505,3 +505,99 @@ class TestVirtualpServersCommandsIntegration:
                     # Fetch and make sure it's gone
                     with pytest.raises(click.exceptions.Exit):
                         virtual_servers_get(virtual_server_id)
+
+    def test_virtual_servers_list_active_only_integration(self, mock_console, authorized_mock_client, registered_mcp_server) -> None:
+        """Test --active-only flag filters correctly with real server."""
+        with patch_functions("cforge.commands.resources.virtual_servers", print_json=None, get_console=mock_console) as mocks:
+            # Create a virtual server first
+            virtual_server_body = {
+                "name": "test-vs-active",
+                "description": "Test Virtual Server for active-only",
+                "associated_tools": [],
+                "associated_prompts": [],
+                "associated_resources": [],
+            }
+            with patch_functions(
+                "cforge.commands.resources.virtual_servers",
+                prompt_for_schema={"return_value": virtual_server_body},
+            ):
+                virtual_servers_create(data_file=None, name=None, description=None)
+            virtual_server_id = mocks.print_json.call_args[0][0]["id"]
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should include it (starts active)
+            virtual_servers_list(active_only=True, json_output=True)
+            active_servers = mocks.print_json.call_args[0][0]
+            assert any(s["id"] == virtual_server_id for s in active_servers)
+            mocks.print_json.reset_mock()
+
+            # Disable the virtual server
+            virtual_servers_toggle(server_id=virtual_server_id)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should NOT include it now
+            virtual_servers_list(active_only=True, json_output=True)
+            active_servers = mocks.print_json.call_args[0][0]
+            assert not any(s["id"] == virtual_server_id for s in active_servers)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=False should still include it
+            virtual_servers_list(active_only=False, json_output=True)
+            all_servers = mocks.print_json.call_args[0][0]
+            assert any(s["id"] == virtual_server_id for s in all_servers)
+            mocks.print_json.reset_mock()
+
+            # Re-enable the virtual server
+            virtual_servers_toggle(server_id=virtual_server_id)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should include it again
+            virtual_servers_list(active_only=True, json_output=True)
+            active_servers = mocks.print_json.call_args[0][0]
+            assert any(s["id"] == virtual_server_id for s in active_servers)
+
+            # Clean up
+            virtual_servers_delete(virtual_server_id, confirm=True)
+
+    def test_virtual_servers_toggle_status_detection_integration(self, mock_console, authorized_mock_client, registered_mcp_server) -> None:
+        """Test toggle command detects current status correctly with real server."""
+        with patch_functions("cforge.commands.resources.virtual_servers", print_json=None, get_console=mock_console) as mocks:
+            # Create a virtual server first
+            virtual_server_body = {
+                "name": "test-vs-toggle",
+                "description": "Test Virtual Server for toggle detection",
+                "associated_tools": [],
+                "associated_prompts": [],
+                "associated_resources": [],
+            }
+            with patch_functions(
+                "cforge.commands.resources.virtual_servers",
+                prompt_for_schema={"return_value": virtual_server_body},
+            ):
+                virtual_servers_create(data_file=None, name=None, description=None)
+            virtual_server_id = mocks.print_json.call_args[0][0]["id"]
+            initial_status = mocks.print_json.call_args[0][0]["isActive"]
+            assert initial_status is True, "New virtual server should start active"
+            mocks.print_json.reset_mock()
+
+            # Toggle (should detect active and switch to inactive)
+            virtual_servers_toggle(server_id=virtual_server_id)
+            mocks.print_json.reset_mock()
+
+            # Verify status changed by getting it
+            virtual_servers_get(virtual_server_id)
+            current_status = mocks.print_json.call_args[0][0]["isActive"]
+            assert current_status is False, "Virtual server should now be inactive"
+            mocks.print_json.reset_mock()
+
+            # Toggle again (should detect inactive and switch to active)
+            virtual_servers_toggle(server_id=virtual_server_id)
+            mocks.print_json.reset_mock()
+
+            # Verify status changed back
+            virtual_servers_get(virtual_server_id)
+            final_status = mocks.print_json.call_args[0][0]["isActive"]
+            assert final_status is True, "Virtual server should be active again"
+
+            # Clean up
+            virtual_servers_delete(virtual_server_id, confirm=True)

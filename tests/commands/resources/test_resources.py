@@ -416,3 +416,76 @@ class TestResourcesCommandsIntegration:
             # Make sure it's gone
             with pytest.raises(click.exceptions.Exit):
                 resources_get(resource_id)
+
+    def test_resources_list_active_only_integration(self, mock_console, registered_mcp_server) -> None:
+        """Test --active-only flag filters correctly with real server."""
+        with patch_functions("cforge.commands.resources.resources", print_json=None, get_console=mock_console) as mocks:
+            # Get the resources from the registered server
+            resources_list(mcp_server_id=None, active_only=False, json_output=True)
+            all_resources = mocks.print_json.call_args[0][0]
+            assert len(all_resources) >= 1, "Should have at least one resource from registered server"
+            resource_id = all_resources[0]["id"]
+            mocks.print_json.reset_mock()
+
+            # Verify it starts enabled (resources from MCP servers start enabled)
+            resources_list(mcp_server_id=None, active_only=True, json_output=True)
+            active_resources = mocks.print_json.call_args[0][0]
+            assert any(r["id"] == resource_id for r in active_resources), "Resource should start in active-only list"
+            mocks.print_json.reset_mock()
+
+            # Disable it
+            resources_toggle(resource_id)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should NOT include it
+            resources_list(mcp_server_id=None, active_only=True, json_output=True)
+            active_resources = mocks.print_json.call_args[0][0]
+            assert not any(r["id"] == resource_id for r in active_resources), "Disabled resource should NOT appear in active-only list"
+            mocks.print_json.reset_mock()
+
+            # List with active_only=False should include it
+            resources_list(mcp_server_id=None, active_only=False, json_output=True)
+            all_resources = mocks.print_json.call_args[0][0]
+            assert any(r["id"] == resource_id for r in all_resources), "Disabled resource should appear in full list"
+            mocks.print_json.reset_mock()
+
+            # Re-enable it
+            resources_toggle(resource_id)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should include it again
+            resources_list(mcp_server_id=None, active_only=True, json_output=True)
+            active_resources = mocks.print_json.call_args[0][0]
+            assert any(r["id"] == resource_id for r in active_resources), "Re-enabled resource should appear in active-only list"
+
+    def test_resources_toggle_status_detection_integration(self, mock_console, registered_mcp_server) -> None:
+        """Test toggle command detects current status correctly with real server."""
+        with patch_functions("cforge.commands.resources.resources", print_json=None, get_console=mock_console) as mocks:
+            # Get a resource from the registered server
+            resources_list(mcp_server_id=None, active_only=False, json_output=True)
+            all_resources = mocks.print_json.call_args[0][0]
+            resource_id = all_resources[0]["id"]
+            initial_status = all_resources[0]["isActive"]
+            assert initial_status is True, "Resource from MCP server should start active"
+            mocks.print_json.reset_mock()
+
+            # Toggle (should detect active and switch to inactive)
+            resources_toggle(resource_id)
+            mocks.print_json.reset_mock()
+
+            # Verify status changed by listing again
+            resources_list(mcp_server_id=None, active_only=False, json_output=True)
+            all_resources = mocks.print_json.call_args[0][0]
+            resource = [r for r in all_resources if r["id"] == resource_id][0]
+            assert resource["isActive"] is False, "Resource should now be inactive"
+            mocks.print_json.reset_mock()
+
+            # Toggle again (should detect inactive and switch to active)
+            resources_toggle(resource_id)
+            mocks.print_json.reset_mock()
+
+            # Verify status changed back
+            resources_list(mcp_server_id=None, active_only=False, json_output=True)
+            all_resources = mocks.print_json.call_args[0][0]
+            resource = [r for r in all_resources if r["id"] == resource_id][0]
+            assert resource["isActive"] is True, "Resource should be active again"

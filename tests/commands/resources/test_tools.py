@@ -318,3 +318,78 @@ class TestToolsCommandsIntegration:
             # Make sure it's gone
             with pytest.raises(click.exceptions.Exit):
                 tools_get(tool_id)
+
+    def test_tools_list_active_only_integration(self, mock_console, registered_mcp_server) -> None:
+        """Test --active-only flag filters correctly with real server."""
+        with patch_functions("cforge.commands.resources.tools", print_json=None, get_console=mock_console) as mocks:
+            # Get the tools from the registered server
+            tools_list(mcp_server_id=None, active_only=False, json_output=True)
+            all_tools = mocks.print_json.call_args[0][0]
+            assert len(all_tools) >= 1, "Should have at least one tool from registered server"
+            tool_id = all_tools[0]["id"]
+            mocks.print_json.reset_mock()
+
+            # Verify it starts enabled (tools from MCP servers start enabled)
+            tools_list(mcp_server_id=None, active_only=True, json_output=True)
+            active_tools = mocks.print_json.call_args[0][0]
+            assert any(t["id"] == tool_id for t in active_tools), "Tool should start in active-only list"
+            mocks.print_json.reset_mock()
+
+            # Disable it
+            tools_toggle(tool_id)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should NOT include it
+            tools_list(mcp_server_id=None, active_only=True, json_output=True)
+            active_tools = mocks.print_json.call_args[0][0]
+            assert not any(t["id"] == tool_id for t in active_tools), "Disabled tool should NOT appear in active-only list"
+            mocks.print_json.reset_mock()
+
+            # List with active_only=False should include it
+            tools_list(mcp_server_id=None, active_only=False, json_output=True)
+            all_tools = mocks.print_json.call_args[0][0]
+            assert any(t["id"] == tool_id for t in all_tools), "Disabled tool should appear in full list"
+            mocks.print_json.reset_mock()
+
+            # Re-enable it
+            tools_toggle(tool_id)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should include it again
+            tools_list(mcp_server_id=None, active_only=True, json_output=True)
+            active_tools = mocks.print_json.call_args[0][0]
+            assert any(t["id"] == tool_id for t in active_tools), "Re-enabled tool should appear in active-only list"
+
+    def test_tools_toggle_status_detection_integration(self, mock_console, registered_mcp_server) -> None:
+        """Test toggle command detects current status correctly with real server."""
+        with patch_functions("cforge.commands.resources.tools", print_json=None, get_console=mock_console) as mocks:
+            # Get a tool from the registered server
+            tools_list(mcp_server_id=None, active_only=False, json_output=True)
+            all_tools = mocks.print_json.call_args[0][0]
+            tool_id = all_tools[0]["id"]
+            mocks.print_json.reset_mock()
+
+            # Get initial status (should be enabled)
+            tools_get(tool_id)
+            initial_status = mocks.print_json.call_args[0][0]["enabled"]
+            assert initial_status is True, "Tool from MCP server should start enabled"
+            mocks.print_json.reset_mock()
+
+            # Toggle (should detect enabled and switch to disabled)
+            tools_toggle(tool_id)
+            mocks.print_json.reset_mock()
+
+            # Verify status changed by getting it again
+            tools_get(tool_id)
+            current_status = mocks.print_json.call_args[0][0]["enabled"]
+            assert current_status is False, "Tool should now be disabled"
+            mocks.print_json.reset_mock()
+
+            # Toggle again (should detect disabled and switch to enabled)
+            tools_toggle(tool_id)
+            mocks.print_json.reset_mock()
+
+            # Verify status changed back
+            tools_get(tool_id)
+            final_status = mocks.print_json.call_args[0][0]["enabled"]
+            assert final_status is True, "Tool should be enabled again"

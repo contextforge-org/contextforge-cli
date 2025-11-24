@@ -362,3 +362,89 @@ class TestA2ACommandsIntegration:
             # Verify it's gone
             with pytest.raises(click.exceptions.Exit):
                 a2a_get(a2a_id)
+
+    def test_a2a_list_active_only_integration(self, mock_console, authorized_mock_client) -> None:
+        """Test --active-only flag filters correctly with real server."""
+        with patch_functions("cforge.commands.resources.a2a", print_json=None, get_console=mock_console) as mocks:
+            # Create an A2A agent
+            a2a_body = {
+                "name": "test-a2a-active",
+                "endpoint_url": "http://test.example.com",
+                "description": "Test A2A for active-only",
+            }
+            with patch("cforge.commands.resources.a2a.prompt_for_schema", return_value=a2a_body):
+                a2a_create(None)
+            a2a_id = mocks.print_json.call_args[0][0]["id"]
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should include it (starts enabled)
+            a2a_list(active_only=True, json_output=True)
+            active_agents = mocks.print_json.call_args[0][0]
+            assert any(a["id"] == a2a_id for a in active_agents)
+            mocks.print_json.reset_mock()
+
+            # Disable the A2A agent
+            a2a_toggle(agent_id=a2a_id)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should NOT include it now
+            a2a_list(active_only=True, json_output=True)
+            active_agents = mocks.print_json.call_args[0][0]
+            assert not any(a["id"] == a2a_id for a in active_agents)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=False should still include it
+            a2a_list(active_only=False, json_output=True)
+            all_agents = mocks.print_json.call_args[0][0]
+            assert any(a["id"] == a2a_id for a in all_agents)
+            mocks.print_json.reset_mock()
+
+            # Re-enable the A2A agent
+            a2a_toggle(agent_id=a2a_id)
+            mocks.print_json.reset_mock()
+
+            # List with active_only=True should include it again
+            a2a_list(active_only=True, json_output=True)
+            active_agents = mocks.print_json.call_args[0][0]
+            assert any(a["id"] == a2a_id for a in active_agents)
+
+            # Clean up
+            a2a_delete(a2a_id, confirm=True)
+
+    def test_a2a_toggle_status_detection_integration(self, mock_console, authorized_mock_client) -> None:
+        """Test toggle command detects current status correctly with real server."""
+        with patch_functions("cforge.commands.resources.a2a", print_json=None, get_console=mock_console) as mocks:
+            # Create an A2A agent
+            a2a_body = {
+                "name": "test-a2a-toggle",
+                "endpoint_url": "http://test-toggle.example.com",
+                "description": "Test A2A for toggle detection",
+            }
+            with patch("cforge.commands.resources.a2a.prompt_for_schema", return_value=a2a_body):
+                a2a_create(None)
+            a2a_id = mocks.print_json.call_args[0][0]["id"]
+            initial_status = mocks.print_json.call_args[0][0]["enabled"]
+            assert initial_status is True, "New A2A agent should start enabled"
+            mocks.print_json.reset_mock()
+
+            # Toggle (should detect enabled and switch to disabled)
+            a2a_toggle(agent_id=a2a_id)
+            mocks.print_json.reset_mock()
+
+            # Verify status changed by getting it
+            a2a_get(a2a_id)
+            current_status = mocks.print_json.call_args[0][0]["enabled"]
+            assert current_status is False, "A2A agent should now be disabled"
+            mocks.print_json.reset_mock()
+
+            # Toggle again (should detect disabled and switch to enabled)
+            a2a_toggle(agent_id=a2a_id)
+            mocks.print_json.reset_mock()
+
+            # Verify status changed back
+            a2a_get(a2a_id)
+            final_status = mocks.print_json.call_args[0][0]["enabled"]
+            assert final_status is True, "A2A agent should be enabled again"
+
+            # Clean up
+            a2a_delete(a2a_id, confirm=True)
