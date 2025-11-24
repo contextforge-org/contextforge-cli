@@ -57,7 +57,6 @@ from cforge.commands.resources.resources import (
     resources_delete,
     resources_toggle,
     resources_templates,
-    resources_subscribe,
 )
 from cforge.commands.resources.prompts import (
     prompts_list,
@@ -153,7 +152,6 @@ resources_app.command("update")(resources_update)
 resources_app.command("delete")(resources_delete)
 resources_app.command("toggle")(resources_toggle)
 resources_app.command("templates")(resources_templates)
-resources_app.command("subscribe")(resources_subscribe)
 
 # ---------------------------------------------------------------------------
 # Prompts command group

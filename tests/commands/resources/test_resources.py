@@ -24,7 +24,6 @@ from cforge.commands.resources.resources import (
     resources_delete,
     resources_get,
     resources_list,
-    resources_subscribe,
     resources_templates,
     resources_toggle,
     resources_update,
@@ -205,15 +204,6 @@ class TestResourcesCommands:
                 with patch("cforge.commands.resources.resources.print_json"):
                     resources_templates()
 
-    def test_resources_subscribe_success(self, mock_console) -> None:
-        """Test resources subscribe command."""
-        mock_result = {"subscription_id": "sub123"}
-
-        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
-            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_result):
-                with patch("cforge.commands.resources.resources.print_json"):
-                    resources_subscribe(resource_id=1)
-
     def test_resources_get_error(self, mock_console) -> None:
         """Test resources get error handling."""
         with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
@@ -234,13 +224,6 @@ class TestResourcesCommands:
             with patch("cforge.commands.resources.resources.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
                     resources_templates()
-
-    def test_resources_subscribe_error(self, mock_console) -> None:
-        """Test resources subscribe error handling."""
-        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
-            with patch("cforge.commands.resources.resources.make_authenticated_request", side_effect=Exception("API error")):
-                with pytest.raises(typer.Exit):
-                    resources_subscribe(resource_id=1)
 
 
 class TestResourcesCommandsIntegration:

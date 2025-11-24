@@ -184,18 +184,3 @@ def resources_templates() -> None:
 
     except Exception as e:
         handle_exception(e)
-
-
-def resources_subscribe(
-    resource_id: int = typer.Argument(..., help="Resource ID"),
-) -> None:
-    """Subscribe to resource updates."""
-    console = get_console()
-
-    try:
-        result = make_authenticated_request("POST", f"/resources/subscribe/{resource_id}")
-        console.print("[green]✓ Subscribed to resource updates![/green]")
-        print_json(result, "Subscription")
-
-    except Exception as e:
-        handle_exception(e)
