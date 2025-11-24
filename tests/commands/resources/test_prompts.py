@@ -71,6 +71,50 @@ class TestPromptsCommands:
             with pytest.raises(typer.Exit):
                 prompts_list(mcp_server_id=None, json_output=False)
 
+    def test_prompts_list_with_active_only_true(self, mock_console) -> None:
+        """Test prompts list with --active-only flag set to True."""
+        mock_prompts = [{"id": 1, "name": "prompt1", "isActive": True}]
+
+        with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_prompts, print_table=None) as mocks:
+            prompts_list(mcp_server_id=None, active_only=True, json_output=False)
+
+            # Verify that include_inactive=False was passed to API
+            call_args = mocks.make_authenticated_request.call_args
+            assert call_args[1]["params"]["include_inactive"] is False
+
+    def test_prompts_list_with_active_only_false(self, mock_console) -> None:
+        """Test prompts list with --active-only flag set to False (default)."""
+        mock_prompts = [{"id": 1, "name": "prompt1", "isActive": True}, {"id": 2, "name": "prompt2", "isActive": False}]
+
+        with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_prompts, print_table=None) as mocks:
+            prompts_list(mcp_server_id=None, active_only=False, json_output=False)
+
+            # Verify that include_inactive=True was passed to API
+            call_args = mocks.make_authenticated_request.call_args
+            assert call_args[1]["params"]["include_inactive"] is True
+
+    def test_prompts_list_default_shows_all(self, mock_console) -> None:
+        """Test prompts list default behavior shows all prompts."""
+        mock_prompts = [{"id": 1, "name": "prompt1", "isActive": True}, {"id": 2, "name": "prompt2", "isActive": False}]
+
+        with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_prompts, print_table=None) as mocks:
+            # Call with explicit active_only=False (default value)
+            prompts_list(mcp_server_id=None, active_only=False, json_output=False)
+
+            # Verify that include_inactive=True was passed to API (default behavior)
+            call_args = mocks.make_authenticated_request.call_args
+            assert call_args[1]["params"]["include_inactive"] is True
+
+    def test_prompts_list_with_filters_and_active_only(self, mock_console) -> None:
+        """Test prompts list with both mcp_server_id and active_only filters."""
+        with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=[], print_table=None) as mocks:
+            prompts_list(mcp_server_id="5", active_only=True, json_output=False)
+
+            # Verify params include both filters
+            call_args = mocks.make_authenticated_request.call_args
+            assert call_args[1]["params"]["gateway_id"] == "5"
+            assert call_args[1]["params"]["include_inactive"] is False
+
     def test_prompts_get_success(self, mock_console) -> None:
         """Test prompts get command."""
         mock_prompt = {"id": 1, "name": "test"}
@@ -165,12 +209,92 @@ class TestPromptsCommands:
         # Should not prompt
         assert not any("confirm" in str(call) for call in mock_console.print.call_args_list)
 
-    def test_prompts_toggle_success(self, mock_console) -> None:
-        """Test prompts toggle command."""
-        mock_result = {"id": 1, "enabled": False}
+    def test_prompts_toggle_from_inactive_to_active(self, mock_console) -> None:
+        """Test toggling a prompt from inactive to active."""
+        with patch_functions(
+            "cforge.commands.resources.prompts",
+            get_console=mock_console,
+            print_json=None,
+            make_authenticated_request={
+                "side_effect": [[{"id": 1, "name": "test", "isActive": False}], {"id": 1, "name": "test", "isActive": True}]  # GET list with include_inactive=True  # POST toggle result
+            },
+        ) as mocks:
 
-        with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_result, print_json=None):
             prompts_toggle(prompt_id=1)
+
+            # Verify two calls were made
+            assert mocks.make_authenticated_request.call_count == 2
+
+            # Verify first call was GET to list with include_inactive=True
+            get_call = mocks.make_authenticated_request.call_args_list[0]
+            assert get_call[0][0] == "GET"
+            assert get_call[0][1] == "/prompts"
+            assert get_call[1]["params"]["include_inactive"] is True
+
+            # Verify second call was POST with activate=True
+            post_call = mocks.make_authenticated_request.call_args_list[1]
+            assert post_call[0][0] == "POST"
+            assert post_call[0][1] == "/prompts/1/toggle"
+            assert post_call[1]["params"]["activate"] is True
+
+    def test_prompts_toggle_from_active_to_inactive(self, mock_console) -> None:
+        """Test toggling a prompt from active to inactive."""
+        with patch_functions(
+            "cforge.commands.resources.prompts",
+            get_console=mock_console,
+            print_json=None,
+            make_authenticated_request={
+                "side_effect": [[{"id": 1, "name": "test", "isActive": True}], {"id": 1, "name": "test", "isActive": False}]  # GET list with include_inactive=True  # POST toggle result
+            },
+        ) as mocks:
+
+            prompts_toggle(prompt_id=1)
+
+            # Verify two calls were made
+            assert mocks.make_authenticated_request.call_count == 2
+
+            # Verify first call was GET to list with include_inactive=True
+            get_call = mocks.make_authenticated_request.call_args_list[0]
+            assert get_call[0][0] == "GET"
+            assert get_call[0][1] == "/prompts"
+            assert get_call[1]["params"]["include_inactive"] is True
+
+            # Verify second call was POST with activate=False
+            post_call = mocks.make_authenticated_request.call_args_list[1]
+            assert post_call[0][0] == "POST"
+            assert post_call[0][1] == "/prompts/1/toggle"
+            assert post_call[1]["params"]["activate"] is False
+
+    def test_prompts_toggle_detects_current_status(self, mock_console) -> None:
+        """Test that toggle command queries list to detect current status before toggling."""
+        with patch_functions(
+            "cforge.commands.resources.prompts",
+            get_console=mock_console,
+            print_json=None,
+            make_authenticated_request={"side_effect": [[{"id": 1, "name": "test", "isActive": True}], {"id": 1, "name": "test", "isActive": False}]},
+        ) as mocks:
+
+            prompts_toggle(prompt_id=1)
+
+            # Verify GET list was called first to detect current status
+            calls = mocks.make_authenticated_request.call_args_list
+            assert len(calls) == 2
+            assert calls[0][0][0] == "GET"  # First call is GET
+            assert calls[0][0][1] == "/prompts"  # GET list endpoint
+            assert calls[1][0][0] == "POST"  # Second call is POST
+
+    def test_prompts_toggle_prompt_not_found(self, mock_console) -> None:
+        """Test toggle command error when prompt is not found in list."""
+        with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=[{"id": 2, "name": "other", "isActive": True}]) as mocks:
+
+            with pytest.raises(typer.Exit) as exc_info:
+                prompts_toggle(prompt_id=1)
+
+            # Verify error was raised
+            assert exc_info.value.exit_code == 1
+
+            # Verify only GET was called (POST never happened)
+            assert mocks.make_authenticated_request.call_count == 1
 
     def test_prompts_execute_success(self, mock_console) -> None:
         """Test prompts execute command."""

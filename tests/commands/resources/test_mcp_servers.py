@@ -61,6 +61,40 @@ class TestMcpServersCommands:
             with pytest.raises(typer.Exit):
                 mcp_servers_list(json_output=False)
 
+    def test_mcp_servers_list_with_active_only_true(self, mock_console) -> None:
+        """Test mcp-servers list with --active-only flag set to True."""
+        mock_servers = [{"id": "test-server-1234", "name": "server1", "enabled": True}]
+
+        with patch_functions("cforge.commands.resources.mcp_servers", make_authenticated_request=mock_servers, print_table=None) as mocks:
+            mcp_servers_list(active_only=True, json_output=False)
+
+            # Verify that include_inactive=False was passed to API
+            call_args = mocks.make_authenticated_request.call_args
+            assert call_args[1]["params"]["include_inactive"] is False
+
+    def test_mcp_servers_list_with_active_only_false(self, mock_console) -> None:
+        """Test mcp-servers list with --active-only flag set to False (default)."""
+        mock_servers = [{"id": "test-server-1234", "name": "server1", "enabled": True}, {"id": "test-server-5678", "name": "server2", "enabled": False}]
+
+        with patch_functions("cforge.commands.resources.mcp_servers", make_authenticated_request=mock_servers, print_table=None) as mocks:
+            mcp_servers_list(active_only=False, json_output=False)
+
+            # Verify that include_inactive=True was passed to API
+            call_args = mocks.make_authenticated_request.call_args
+            assert call_args[1]["params"]["include_inactive"] is True
+
+    def test_mcp_servers_list_default_shows_all(self, mock_console) -> None:
+        """Test mcp-servers list default behavior shows all servers."""
+        mock_servers = [{"id": "test-server-1234", "name": "server1", "enabled": True}, {"id": "test-server-5678", "name": "server2", "enabled": False}]
+
+        with patch_functions("cforge.commands.resources.mcp_servers", make_authenticated_request=mock_servers, print_table=None, get_console=mock_console) as mocks:
+            # Call with explicit active_only=False (default value)
+            mcp_servers_list(active_only=False, json_output=False)
+
+            # Verify that include_inactive=True was passed to API (default behavior)
+            call_args = mocks.make_authenticated_request.call_args
+            assert call_args[1]["params"]["include_inactive"] is True
+
     def test_mcp_servers_get_success(self, mock_console) -> None:
         """Test mcp-servers get command."""
         mock_server = {"id": "test-server-1234", "name": "test"}
@@ -171,6 +205,83 @@ class TestMcpServersCommands:
         with patch_functions("cforge.commands.resources.mcp_servers", make_authenticated_request={"side_effect": Exception("API error")}):
             with pytest.raises(typer.Exit):
                 mcp_servers_get(mcp_server_id="test-server-123")
+
+    def test_mcp_servers_toggle_from_disabled_to_enabled(self, mock_console) -> None:
+        """Test toggling an MCP server from disabled to enabled."""
+        with patch_functions(
+            "cforge.commands.resources.mcp_servers",
+            get_console=mock_console,
+            make_authenticated_request={
+                "side_effect": [
+                    {"id": "test-server-123", "name": "test", "enabled": False},  # GET current status
+                    {"gateway": {"id": "test-server-123", "name": "test", "enabled": True}},  # POST toggle result
+                ]
+            },
+            print_json=None,
+        ) as mocks:
+
+            mcp_servers_toggle(mcp_server_id="test-server-123")
+
+            # Verify two calls were made
+            assert mocks.make_authenticated_request.call_count == 2
+
+            # Verify first call was GET to check current status
+            get_call = mocks.make_authenticated_request.call_args_list[0]
+            assert get_call[0][0] == "GET"
+            assert get_call[0][1] == "/gateways/test-server-123"
+
+            # Verify second call was POST with activate=True
+            post_call = mocks.make_authenticated_request.call_args_list[1]
+            assert post_call[0][0] == "POST"
+            assert post_call[0][1] == "/gateways/test-server-123/toggle"
+            assert post_call[1]["params"]["activate"] is True
+
+    def test_mcp_servers_toggle_from_enabled_to_disabled(self, mock_console) -> None:
+        """Test toggling an MCP server from enabled to disabled."""
+        with patch_functions(
+            "cforge.commands.resources.mcp_servers",
+            get_console=mock_console,
+            make_authenticated_request={
+                "side_effect": [
+                    {"id": "test-server-123", "name": "test", "enabled": True},  # GET current status
+                    {"gateway": {"id": "test-server-123", "name": "test", "enabled": False}},  # POST toggle result
+                ]
+            },
+            print_json=None,
+        ) as mocks:
+
+            mcp_servers_toggle(mcp_server_id="test-server-123")
+
+            # Verify two calls were made
+            assert mocks.make_authenticated_request.call_count == 2
+
+            # Verify first call was GET to check current status
+            get_call = mocks.make_authenticated_request.call_args_list[0]
+            assert get_call[0][0] == "GET"
+            assert get_call[0][1] == "/gateways/test-server-123"
+
+            # Verify second call was POST with activate=False
+            post_call = mocks.make_authenticated_request.call_args_list[1]
+            assert post_call[0][0] == "POST"
+            assert post_call[0][1] == "/gateways/test-server-123/toggle"
+            assert post_call[1]["params"]["activate"] is False
+
+    def test_mcp_servers_toggle_detects_current_status(self, mock_console) -> None:
+        """Test that toggle command detects current status before toggling."""
+        with patch_functions(
+            "cforge.commands.resources.mcp_servers",
+            get_console=mock_console,
+            make_authenticated_request={"side_effect": [{"id": "test-server-123", "name": "test", "enabled": True}, {"gateway": {"id": "test-server-123", "name": "test", "enabled": False}}]},
+            print_json=None,
+        ) as mocks:
+
+            mcp_servers_toggle(mcp_server_id="test-server-123")
+
+            # Verify GET was called first to detect current status
+            calls = mocks.make_authenticated_request.call_args_list
+            assert len(calls) == 2
+            assert calls[0][0][0] == "GET"  # First call is GET
+            assert calls[1][0][0] == "POST"  # Second call is POST
 
     def test_mcp_servers_toggle_error(self, mock_console) -> None:
         """Test mcp-servers toggle error handling."""

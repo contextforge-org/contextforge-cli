@@ -36,7 +36,7 @@ class TestA2aCommands:
 
     def test_a2a_list_success(self, mock_console) -> None:
         """Test a2a list command."""
-        mock_agents = [{"id": 1, "name": "agent1", "url": "http://example.com", "description": "desc1", "enabled": True}]
+        mock_agents = [{"id": "agent-1", "name": "agent1", "url": "http://example.com", "description": "desc1", "enabled": True}]
 
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.make_authenticated_request", return_value=mock_agents):
@@ -68,9 +68,49 @@ class TestA2aCommands:
                 with pytest.raises(typer.Exit):
                     a2a_list(json_output=False)
 
+    def test_a2a_list_with_active_only_true(self, mock_console) -> None:
+        """Test a2a list with --active-only flag set to True."""
+        mock_agents = [{"id": "agent-1", "name": "agent1", "enabled": True}]
+
+        with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.a2a.make_authenticated_request", return_value=mock_agents) as mock_req:
+                with patch("cforge.commands.resources.a2a.print_table"):
+                    a2a_list(active_only=True, json_output=False)
+
+                    # Verify that include_inactive=False was passed to API
+                    call_args = mock_req.call_args
+                    assert call_args[1]["params"]["include_inactive"] is False
+
+    def test_a2a_list_with_active_only_false(self, mock_console) -> None:
+        """Test a2a list with --active-only flag set to False (default)."""
+        mock_agents = [{"id": "agent-1", "name": "agent1", "enabled": True}, {"id": "agent-2", "name": "agent2", "enabled": False}]
+
+        with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.a2a.make_authenticated_request", return_value=mock_agents) as mock_req:
+                with patch("cforge.commands.resources.a2a.print_table"):
+                    a2a_list(active_only=False, json_output=False)
+
+                    # Verify that include_inactive=True was passed to API
+                    call_args = mock_req.call_args
+                    assert call_args[1]["params"]["include_inactive"] is True
+
+    def test_a2a_list_default_shows_all(self, mock_console) -> None:
+        """Test a2a list default behavior shows all agents."""
+        mock_agents = [{"id": "agent-1", "name": "agent1", "enabled": True}, {"id": "agent-2", "name": "agent2", "enabled": False}]
+
+        with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.a2a.make_authenticated_request", return_value=mock_agents) as mock_req:
+                with patch("cforge.commands.resources.a2a.print_table"):
+                    # Call with explicit active_only=False (default value)
+                    a2a_list(active_only=False, json_output=False)
+
+                    # Verify that include_inactive=True was passed to API (default behavior)
+                    call_args = mock_req.call_args
+                    assert call_args[1]["params"]["include_inactive"] is True
+
     def test_a2a_get_success(self, mock_console) -> None:
         """Test a2a get command."""
-        mock_agent = {"id": 1, "name": "test"}
+        mock_agent = {"id": "agent-1", "name": "test"}
 
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.make_authenticated_request", return_value=mock_agent):
@@ -79,7 +119,7 @@ class TestA2aCommands:
 
     def test_a2a_create_from_file(self, mock_console) -> None:
         """Test a2a create from file."""
-        mock_result = {"id": 1, "name": "new_agent"}
+        mock_result = {"id": "agent-1", "name": "new_agent"}
 
         with tempfile.TemporaryDirectory() as temp_dir:
             data_file = Path(temp_dir) / "agent.json"
@@ -98,7 +138,7 @@ class TestA2aCommands:
 
     def test_a2a_create_interactive(self, mock_console) -> None:
         """Test a2a create interactive mode."""
-        mock_result = {"id": 1, "name": "new_agent"}
+        mock_result = {"id": "agent-1", "name": "new_agent"}
 
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.prompt_for_schema", return_value={"name": "test", "url": "http://example.com"}):
@@ -108,7 +148,7 @@ class TestA2aCommands:
 
     def test_a2a_create_with_options(self, mock_console) -> None:
         """Test a2a create with command-line options."""
-        mock_result = {"id": 1, "name": "new_agent"}
+        mock_result = {"id": "agent-1", "name": "new_agent"}
 
         with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.a2a.prompt_for_schema", return_value={"name": "test", "url": "http://example.com", "description": "desc"}) as mock_prompt:
@@ -124,7 +164,7 @@ class TestA2aCommands:
 
     def test_a2a_update_success(self, mock_console) -> None:
         """Test a2a update command."""
-        mock_result = {"id": 1, "name": "updated"}
+        mock_result = {"id": "agent-1", "name": "updated"}
 
         with tempfile.TemporaryDirectory() as temp_dir:
             data_file = Path(temp_dir) / "update.json"
@@ -192,6 +232,67 @@ class TestA2aCommands:
             with patch("cforge.commands.resources.a2a.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
                     a2a_get(agent_id="1")
+
+    def test_a2a_toggle_from_disabled_to_enabled(self, mock_console) -> None:
+        """Test toggling an A2A agent from disabled to enabled."""
+        with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
+            # Create side_effect list with two responses
+            side_effects = [{"id": "1", "name": "test", "enabled": False}, {"id": "1", "name": "test", "enabled": True}]  # GET current status  # POST toggle result
+            with patch("cforge.commands.resources.a2a.make_authenticated_request", side_effect=side_effects) as mock_req:
+                with patch("cforge.commands.resources.a2a.print_json"):
+                    a2a_toggle(agent_id="1")
+
+                # Verify two calls were made
+                assert mock_req.call_count == 2
+
+                # Verify first call was GET to check current status
+                get_call = mock_req.call_args_list[0]
+                assert get_call[0][0] == "GET"
+                assert get_call[0][1] == "/a2a/1"
+
+                # Verify second call was POST with activate=True
+                post_call = mock_req.call_args_list[1]
+                assert post_call[0][0] == "POST"
+                assert post_call[0][1] == "/a2a/1/toggle"
+                assert post_call[1]["params"]["activate"] is True
+
+    def test_a2a_toggle_from_enabled_to_disabled(self, mock_console) -> None:
+        """Test toggling an A2A agent from enabled to disabled."""
+        with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
+            # Create side_effect list with two responses
+            side_effects = [{"id": "1", "name": "test", "enabled": True}, {"id": "1", "name": "test", "enabled": False}]  # GET current status  # POST toggle result
+            with patch("cforge.commands.resources.a2a.make_authenticated_request", side_effect=side_effects) as mock_req:
+                with patch("cforge.commands.resources.a2a.print_json"):
+                    a2a_toggle(agent_id="1")
+
+                # Verify two calls were made
+                assert mock_req.call_count == 2
+
+                # Verify first call was GET to check current status
+                get_call = mock_req.call_args_list[0]
+                assert get_call[0][0] == "GET"
+                assert get_call[0][1] == "/a2a/1"
+
+                # Verify second call was POST with activate=False
+                post_call = mock_req.call_args_list[1]
+                assert post_call[0][0] == "POST"
+                assert post_call[0][1] == "/a2a/1/toggle"
+                assert post_call[1]["params"]["activate"] is False
+
+    def test_a2a_toggle_detects_current_status(self, mock_console) -> None:
+        """Test that toggle command detects current status before toggling."""
+        with patch("cforge.commands.resources.a2a.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.a2a.make_authenticated_request") as mock_req:
+                # Mock an agent that is currently enabled
+                mock_req.side_effect = [{"id": "1", "name": "test", "enabled": True}, {"id": "1", "name": "test", "enabled": False}]
+                with patch("cforge.commands.resources.a2a.print_json"):
+                    a2a_toggle(agent_id="1")
+
+                # Verify GET was called first to detect current status
+                calls = mock_req.call_args_list
+                assert len(calls) == 2
+                assert calls[0][0][0] == "GET"  # First call is GET
+                assert calls[1][0][0] == "POST"  # Second call is POST
 
     def test_a2a_toggle_error(self, mock_console) -> None:
         """Test a2a toggle error handling."""

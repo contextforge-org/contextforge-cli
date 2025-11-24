@@ -79,6 +79,58 @@ class TestResourcesCommands:
                 with pytest.raises(typer.Exit):
                     resources_list(mcp_server_id=None, json_output=False)
 
+    def test_resources_list_with_active_only_true(self, mock_console) -> None:
+        """Test resources list with --active-only flag set to True."""
+        mock_resources = [{"id": 1, "name": "resource1", "isActive": True}]
+
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_resources) as mock_req:
+                with patch("cforge.commands.resources.resources.print_table"):
+                    resources_list(mcp_server_id=None, active_only=True, json_output=False)
+
+                    # Verify that include_inactive=False was passed to API
+                    call_args = mock_req.call_args
+                    assert call_args[1]["params"]["include_inactive"] is False
+
+    def test_resources_list_with_active_only_false(self, mock_console) -> None:
+        """Test resources list with --active-only flag set to False (default)."""
+        mock_resources = [{"id": 1, "name": "resource1", "isActive": True}, {"id": 2, "name": "resource2", "isActive": False}]
+
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_resources) as mock_req:
+                with patch("cforge.commands.resources.resources.print_table"):
+                    resources_list(mcp_server_id=None, active_only=False, json_output=False)
+
+                    # Verify that include_inactive=True was passed to API
+                    call_args = mock_req.call_args
+                    assert call_args[1]["params"]["include_inactive"] is True
+
+    def test_resources_list_default_shows_all(self, mock_console) -> None:
+        """Test resources list default behavior shows all resources."""
+        mock_resources = [{"id": 1, "name": "resource1", "isActive": True}, {"id": 2, "name": "resource2", "isActive": False}]
+
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_resources) as mock_req:
+                with patch("cforge.commands.resources.resources.print_table"):
+                    # Call with explicit active_only=False (default value)
+                    resources_list(mcp_server_id=None, active_only=False, json_output=False)
+
+                    # Verify that include_inactive=True was passed to API (default behavior)
+                    call_args = mock_req.call_args
+                    assert call_args[1]["params"]["include_inactive"] is True
+
+    def test_resources_list_with_filters_and_active_only(self, mock_console) -> None:
+        """Test resources list with both mcp_server_id and active_only filters."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=[]) as mock_req:
+                with patch("cforge.commands.resources.resources.print_table"):
+                    resources_list(mcp_server_id=5, active_only=True, json_output=False)
+
+                # Verify params include both filters
+                call_args = mock_req.call_args
+                assert call_args[1]["params"]["gateway_id"] == 5
+                assert call_args[1]["params"]["include_inactive"] is False
+
     def test_resources_get_success(self, mock_console) -> None:
         """Test resources get command."""
         mock_resource = {"id": 1, "name": "test"}
@@ -186,14 +238,85 @@ class TestResourcesCommands:
         # Should not prompt
         assert not any("confirm" in str(call) for call in mock_console.print.call_args_list)
 
-    def test_resources_toggle_success(self, mock_console) -> None:
-        """Test resources toggle command."""
-        mock_result = {"id": 1, "enabled": False}
-
+    def test_resources_toggle_from_inactive_to_active(self, mock_console) -> None:
+        """Test toggling a resource from inactive to active."""
         with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
-            with patch("cforge.commands.resources.resources.make_authenticated_request", return_value=mock_result):
+            with patch("cforge.commands.resources.resources.make_authenticated_request") as mock_req:
+                # First call (GET list) returns list with inactive resource, second call (POST) returns active resource
+                mock_req.side_effect = [[{"id": 1, "name": "test", "isActive": False}], {"id": 1, "name": "test", "isActive": True}]  # GET list with include_inactive=True  # POST toggle result
                 with patch("cforge.commands.resources.resources.print_json"):
                     resources_toggle(resource_id=1)
+
+                # Verify two calls were made
+                assert mock_req.call_count == 2
+
+                # Verify first call was GET to list with include_inactive=True
+                get_call = mock_req.call_args_list[0]
+                assert get_call[0][0] == "GET"
+                assert get_call[0][1] == "/resources"
+                assert get_call[1]["params"]["include_inactive"] is True
+
+                # Verify second call was POST with activate=True
+                post_call = mock_req.call_args_list[1]
+                assert post_call[0][0] == "POST"
+                assert post_call[0][1] == "/resources/1/toggle"
+                assert post_call[1]["params"]["activate"] is True
+
+    def test_resources_toggle_from_active_to_inactive(self, mock_console) -> None:
+        """Test toggling a resource from active to inactive."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request") as mock_req:
+                # First call (GET list) returns list with active resource, second call (POST) returns inactive resource
+                mock_req.side_effect = [[{"id": 1, "name": "test", "isActive": True}], {"id": 1, "name": "test", "isActive": False}]  # GET list with include_inactive=True  # POST toggle result
+                with patch("cforge.commands.resources.resources.print_json"):
+                    resources_toggle(resource_id=1)
+
+                # Verify two calls were made
+                assert mock_req.call_count == 2
+
+                # Verify first call was GET to list with include_inactive=True
+                get_call = mock_req.call_args_list[0]
+                assert get_call[0][0] == "GET"
+                assert get_call[0][1] == "/resources"
+                assert get_call[1]["params"]["include_inactive"] is True
+
+                # Verify second call was POST with activate=False
+                post_call = mock_req.call_args_list[1]
+                assert post_call[0][0] == "POST"
+                assert post_call[0][1] == "/resources/1/toggle"
+                assert post_call[1]["params"]["activate"] is False
+
+    def test_resources_toggle_detects_current_status(self, mock_console) -> None:
+        """Test that toggle command queries list to detect current status before toggling."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request") as mock_req:
+                # Mock a resource that is currently active
+                mock_req.side_effect = [[{"id": 1, "name": "test", "isActive": True}], {"id": 1, "name": "test", "isActive": False}]
+                with patch("cforge.commands.resources.resources.print_json"):
+                    resources_toggle(resource_id=1)
+
+                # Verify GET list was called first to detect current status
+                calls = mock_req.call_args_list
+                assert len(calls) == 2
+                assert calls[0][0][0] == "GET"  # First call is GET
+                assert calls[0][0][1] == "/resources"  # GET list endpoint
+                assert calls[1][0][0] == "POST"  # Second call is POST
+
+    def test_resources_toggle_resource_not_found(self, mock_console) -> None:
+        """Test toggle command error when resource is not found in list."""
+        with patch("cforge.commands.resources.resources.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.resources.make_authenticated_request") as mock_req:
+                # Return empty list (resource not found)
+                mock_req.return_value = [{"id": 2, "name": "other", "isActive": True}]
+
+                with pytest.raises(typer.Exit) as exc_info:
+                    resources_toggle(resource_id=1)
+
+                # Verify error was raised
+                assert exc_info.value.exit_code == 1
+
+                # Verify only GET was called (POST never happened)
+                assert mock_req.call_count == 1
 
     def test_resources_templates_success(self, mock_console) -> None:
         """Test resources templates command."""

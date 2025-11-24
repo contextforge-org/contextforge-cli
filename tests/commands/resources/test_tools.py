@@ -35,7 +35,7 @@ class TestToolsCommands:
 
     def test_tools_list_success(self, mock_console) -> None:
         """Test tools list command."""
-        mock_tools = [{"id": 1, "name": "tool1", "description": "desc1", "mcp_server_id": 1, "enabled": True}]
+        mock_tools = [{"id": "tool-1", "name": "tool1", "description": "desc1", "mcp_server_id": "mcp-1", "enabled": True}]
 
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=mock_tools):
@@ -61,7 +61,7 @@ class TestToolsCommands:
                 # Verify params
                 call_args = mock_req.call_args
                 assert call_args[1]["params"]["gateway_id"] == "5"
-                assert call_args[1]["params"]["active"] is True
+                assert call_args[1]["params"]["include_inactive"] is False
 
     def test_tools_list_no_results(self, mock_console) -> None:
         """Test tools list with no results."""
@@ -81,16 +81,16 @@ class TestToolsCommands:
 
     def test_tools_get_success(self, mock_console) -> None:
         """Test tools get command."""
-        mock_tool = {"id": 1, "name": "test"}
+        mock_tool = {"id": "tool-1", "name": "test"}
 
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=mock_tool):
                 with patch("cforge.commands.resources.tools.print_json"):
-                    tools_get(tool_id=1, json_output=False)
+                    tools_get(tool_id="tool-1", json_output=False)
 
     def test_tools_create_from_file(self, mock_console) -> None:
         """Test tools create from file."""
-        mock_result = {"id": 1, "name": "new_tool"}
+        mock_result = {"id": "tool-1", "name": "new_tool"}
 
         with tempfile.TemporaryDirectory() as temp_dir:
             data_file = Path(temp_dir) / "tool.json"
@@ -109,7 +109,7 @@ class TestToolsCommands:
 
     def test_tools_create_interactive(self, mock_console) -> None:
         """Test tools create interactive mode."""
-        mock_result = {"id": 1, "name": "new_tool"}
+        mock_result = {"id": "tool-1", "name": "new_tool"}
 
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.prompt_for_schema", return_value={"name": "test"}):
@@ -119,7 +119,7 @@ class TestToolsCommands:
 
     def test_tools_create_with_options(self, mock_console) -> None:
         """Test tools create with command-line options."""
-        mock_result = {"id": 1, "name": "new_tool"}
+        mock_result = {"id": "tool-1", "name": "new_tool"}
 
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.prompt_for_schema", return_value={"name": "test", "description": "desc"}) as mock_prompt:
@@ -134,7 +134,7 @@ class TestToolsCommands:
 
     def test_tools_update_success(self, mock_console) -> None:
         """Test tools update command."""
-        mock_result = {"id": 1, "name": "updated"}
+        mock_result = {"id": "tool-1", "name": "updated"}
 
         with tempfile.TemporaryDirectory() as temp_dir:
             data_file = Path(temp_dir) / "update.json"
@@ -143,27 +143,27 @@ class TestToolsCommands:
             with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
                 with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=mock_result):
                     with patch("cforge.commands.resources.tools.print_json"):
-                        tools_update(tool_id=1, data_file=data_file)
+                        tools_update(tool_id="tool-1", data_file=data_file)
 
     def test_tools_update_file_not_found(self, mock_console) -> None:
         """Test tools update with missing file."""
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with pytest.raises(typer.Exit):
-                tools_update(tool_id=1, data_file=Path("/nonexistent.json"))
+                tools_update(tool_id="tool-1", data_file=Path("/nonexistent.json"))
 
     def test_tools_delete_with_confirmation(self, mock_console) -> None:
         """Test tools delete with confirmation."""
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request"):
                 with patch("cforge.commands.resources.tools.typer.confirm", return_value=True):
-                    tools_delete(tool_id=1, confirm=False)
+                    tools_delete(tool_id="tool-1", confirm=False)
 
     def test_tools_delete_cancelled(self, mock_console) -> None:
         """Test tools delete cancelled."""
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.typer.confirm", return_value=False):
                 with pytest.raises(typer.Exit) as exc_info:
-                    tools_delete(tool_id=1, confirm=False)
+                    tools_delete(tool_id="tool-1", confirm=False)
 
                 # Note: Exit(0) gets caught by exception handler and converted to Exit(1)
                 assert exc_info.value.exit_code == 1
@@ -172,33 +172,85 @@ class TestToolsCommands:
         """Test tools delete with --yes flag."""
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request"):
-                tools_delete(tool_id=1, confirm=True)
+                tools_delete(tool_id="tool-1", confirm=True)
 
         # Should not prompt
         assert not any("confirm" in str(call) for call in mock_console.print.call_args_list)
 
-    def test_tools_toggle_success(self, mock_console) -> None:
-        """Test tools toggle command."""
-        mock_result = {"id": 1, "enabled": False}
-
+    def test_tools_toggle_from_disabled_to_enabled(self, mock_console) -> None:
+        """Test toggling a tool from disabled to enabled."""
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
-            with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=mock_result):
+            with patch("cforge.commands.resources.tools.make_authenticated_request") as mock_req:
+                # First call (GET) returns disabled tool, second call (POST) returns enabled tool
+                mock_req.side_effect = [{"id": "1", "name": "test", "enabled": False}, {"id": "1", "name": "test", "enabled": True}]  # GET current status  # POST toggle result
                 with patch("cforge.commands.resources.tools.print_json"):
-                    tools_toggle(tool_id=1)
+                    tools_toggle(tool_id="1")
+
+                # Verify two calls were made
+                assert mock_req.call_count == 2
+
+                # Verify first call was GET to check current status
+                get_call = mock_req.call_args_list[0]
+                assert get_call[0][0] == "GET"
+                assert get_call[0][1] == "/tools/1"
+
+                # Verify second call was POST with activate=True
+                post_call = mock_req.call_args_list[1]
+                assert post_call[0][0] == "POST"
+                assert post_call[0][1] == "/tools/1/toggle"
+                assert post_call[1]["params"]["activate"] is True
+
+    def test_tools_toggle_from_enabled_to_disabled(self, mock_console) -> None:
+        """Test toggling a tool from enabled to disabled."""
+        with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.tools.make_authenticated_request") as mock_req:
+                # First call (GET) returns enabled tool, second call (POST) returns disabled tool
+                mock_req.side_effect = [{"id": "1", "name": "test", "enabled": True}, {"id": "1", "name": "test", "enabled": False}]  # GET current status  # POST toggle result
+                with patch("cforge.commands.resources.tools.print_json"):
+                    tools_toggle(tool_id="1")
+
+                # Verify two calls were made
+                assert mock_req.call_count == 2
+
+                # Verify first call was GET to check current status
+                get_call = mock_req.call_args_list[0]
+                assert get_call[0][0] == "GET"
+                assert get_call[0][1] == "/tools/1"
+
+                # Verify second call was POST with activate=False
+                post_call = mock_req.call_args_list[1]
+                assert post_call[0][0] == "POST"
+                assert post_call[0][1] == "/tools/1/toggle"
+                assert post_call[1]["params"]["activate"] is False
+
+    def test_tools_toggle_detects_current_status(self, mock_console) -> None:
+        """Test that toggle command detects current status before toggling."""
+        with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.tools.make_authenticated_request") as mock_req:
+                # Mock a tool that is currently enabled
+                mock_req.side_effect = [{"id": "1", "name": "test", "enabled": True}, {"id": "1", "name": "test", "enabled": False}]
+                with patch("cforge.commands.resources.tools.print_json"):
+                    tools_toggle(tool_id="1")
+
+                # Verify GET was called first to detect current status
+                calls = mock_req.call_args_list
+                assert len(calls) == 2
+                assert calls[0][0][0] == "GET"  # First call is GET
+                assert calls[1][0][0] == "POST"  # Second call is POST
 
     def test_tools_get_error(self, mock_console) -> None:
         """Test tools get error handling."""
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
-                    tools_get(tool_id=1)
+                    tools_get(tool_id="tool-1")
 
     def test_tools_toggle_error(self, mock_console) -> None:
         """Test tools toggle error handling."""
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.tools.make_authenticated_request", side_effect=Exception("API error")):
                 with pytest.raises(typer.Exit):
-                    tools_toggle(tool_id=1)
+                    tools_toggle(tool_id="tool-1")
 
 
 class TestToolsCommandsIntegration:
