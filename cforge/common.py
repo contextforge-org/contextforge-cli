@@ -161,6 +161,10 @@ def make_authenticated_request(
 ) -> Dict[str, Any]:
     """Make an authenticated HTTP request to the gateway API.
 
+    Supports both authenticated and unauthenticated servers. Will attempt
+    the request without authentication if no token is configured, and only
+    fail if the server requires authentication.
+
     Args:
         method: HTTP method (GET, POST, etc.)
         url: URL path for the request
@@ -171,24 +175,28 @@ def make_authenticated_request(
         JSON response from the API
 
     Raises:
-        AuthenticationError: If no authentication is configured
+        AuthenticationError: If the server requires authentication but none is configured
         CLIError: If the API request fails
     """
     token = get_auth_token()
-    if not token:
-        raise AuthenticationError("No authentication configured. Set MCPGATEWAY_BEARER_TOKEN environment variable or run cforge login.")
 
     headers = {"Content-Type": "application/json"}
-    if token.startswith("Basic "):
-        headers["Authorization"] = token
-    else:
-        headers["Authorization"] = f"Bearer {token}"
+    # Only add Authorization header if a token is available
+    if token:
+        if token.startswith("Basic "):
+            headers["Authorization"] = token
+        else:
+            headers["Authorization"] = f"Bearer {token}"
 
     gateway_url = f"http://{get_settings().host}:{get_settings().port}"
     full_url = f"{gateway_url}{url}"
 
     try:
         response = requests.request(method=method, url=full_url, json=json_data, params=params, headers=headers)
+
+        # Handle authentication errors specifically
+        if response.status_code in (401, 403):
+            raise AuthenticationError("Authentication required but not configured. " "Set MCPGATEWAY_BEARER_TOKEN environment variable or run 'cforge login'.")
 
         if response.status_code >= 400:
             raise CLIError(f"API request failed ({response.status_code}): {response.text}")

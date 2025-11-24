@@ -137,14 +137,37 @@ class TestErrors:
 class TestMakeAuthenticatedRequest:
     """Tests for make_authenticated_request function using a server mock."""
 
-    def test_request_no_auth_raises_error(self, mock_client) -> None:
-        """Test that request without auth raises AuthenticationError."""
+    def test_request_no_auth_raises_error_when_server_requires_it(self, mock_settings) -> None:
+        """Test that request without auth raises AuthenticationError when server requires it."""
         # Ensure no token is available
         with patch("cforge.common.load_token", return_value=None):
-            with pytest.raises(AuthenticationError) as exc_info:
-                make_authenticated_request("GET", "/test")
+            # Mock a 401 response from server (authentication required)
+            mock_response = Mock()
+            mock_response.status_code = 401
+            mock_response.text = "Unauthorized"
 
-            assert "No authentication configured" in str(exc_info.value)
+            with patch("cforge.common.requests.request", return_value=mock_response):
+                with pytest.raises(AuthenticationError) as exc_info:
+                    make_authenticated_request("GET", "/test")
+
+                assert "Authentication required but not configured" in str(exc_info.value)
+
+    def test_request_without_auth_succeeds_on_unauthenticated_server(self, mock_settings) -> None:
+        """Test that request without auth succeeds when server doesn't require it."""
+        # Ensure no token is available
+        with patch("cforge.common.load_token", return_value=None):
+            # Mock a successful response from server (no auth required)
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"result": "success"}
+
+            with patch("cforge.common.requests.request", return_value=mock_response) as mock_req:
+                result = make_authenticated_request("GET", "/test")
+
+                # Verify the request was made without Authorization header
+                call_args = mock_req.call_args
+                assert "Authorization" not in call_args[1]["headers"]
+                assert result == {"result": "success"}
 
     def test_request_with_bearer_token(self, mock_client) -> None:
         """Test successful request with Bearer token."""
