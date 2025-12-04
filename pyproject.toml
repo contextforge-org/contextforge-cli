@@ -52,9 +52,9 @@ dependencies = [
 ]
 
 # ----------------------------------------------------------------
-# Development dependencies (for contributors and maintainers)
+# Optional dependencies (extras)
 # ----------------------------------------------------------------
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     # "autoflake>=2.3.1",
     # "bandit>=1.8.6",
@@ -87,7 +87,8 @@ dev = [
     # "pyspelling>=2.11",
     "pytest>=8.4.2",
     # "pytest-asyncio>=1.2.0",
-    # "pytest-cov>=7.0.0",
+    "pytest-cov>=7.0.0",
+    "pytest-html>=3.1.1",
     # "pytest-env>=1.1.5",
     # "pytest-examples>=0.0.18",
     # "pytest-httpx>=0.35.0",
@@ -376,17 +377,13 @@ plugins = ["pydantic.mypy"]              # Enable mypy plugin for Pydantic model
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q --cov=cforge --ignore=tests/playwright --ignore=tests/migration"
+addopts = "-ra --cov=cforge --cov-report=html:htmlcov --cov-report=term"
 testpaths = [ "tests",]
-asyncio_mode = "auto"
 filterwarnings = [
+  "error", # Turn ALL warnings into errors by default
   "ignore:Passing 'msg' argument to .*\\.cancel\\(\\) is deprecated:DeprecationWarning", # From 3rd party libraries
-]
-
-# Set environment variables for all tests
-env = [
-    "DATABASE_URL=sqlite:///:memory:",
-    "TEST_DATABASE_URL=sqlite:///:memory:"
+  "ignore: Using `@model_validator` with mode='after' on a classmethod.*:DeprecationWarning", # From 3rd party libraries
+  "ignore: Unclosed <MemoryObjectReceiveStream.*:ResourceWarning", # From async client calls
 ]
 
 # ── fawltydeps ─────────────────────────────────────────────────────
