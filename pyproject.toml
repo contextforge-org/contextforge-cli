@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 # 📦 Core project metadata (PEP 621)
 # ----------------------------------------------------------------
 [project]
-name = "mcp-contextforge-gateway"
+name = "cforge"
 version = "0.9.0"
 description = "CLI for Context Forge allowing seamless management of local or hosted MCP and A2A resources."
 keywords = ["MCP","API","gateway","proxy","tools",
