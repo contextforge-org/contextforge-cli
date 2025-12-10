@@ -71,6 +71,7 @@ def get_settings() -> CLISettings:
     # NOTE: This duplicates the source of truth for the env var slightly so that
     #   we can use home as the source for the .env file as a 2-phase init.
     home = Path(os.getenv("CONTEXTFORGE_HOME", DEFAULT_HOME))
+    home.mkdir(exist_ok=True)
     with _chdir(home):
 
         settings = CLISettings(client_mode=True)
