@@ -50,8 +50,7 @@ def resources_list(
                 print_table(
                     resources,
                     "Resources",
-                    ["id", "name", "uri", "description", "size", "isActive"],
-                    {"isActive": "enabled"},
+                    ["id", "name", "uri", "description", "size", "enabled"],
                 )
             else:
                 console.print("[yellow]No resources found[/yellow]")
@@ -61,7 +60,7 @@ def resources_list(
 
 
 def resources_get(
-    resource_id: int = typer.Argument(..., help="Resource ID"),
+    resource_id: str = typer.Argument(..., help="Resource ID"),
 ) -> None:
     """Get details of a specific resource."""
     try:
@@ -117,7 +116,7 @@ def resources_create(
 
 
 def resources_update(
-    resource_id: int = typer.Argument(..., help="Resource ID"),
+    resource_id: str = typer.Argument(..., help="Resource ID"),
     data_file: Optional[Path] = typer.Argument(None, help="JSON file containing updated resource data"),
 ) -> None:
     """Update an existing resource."""
@@ -142,7 +141,7 @@ def resources_update(
 
 
 def resources_delete(
-    resource_id: int = typer.Argument(..., help="Resource ID"),
+    resource_id: str = typer.Argument(..., help="Resource ID"),
     confirm: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ) -> None:
     """Delete a resource."""
@@ -163,7 +162,7 @@ def resources_delete(
 
 
 def resources_toggle(
-    resource_id: int = typer.Argument(..., help="Resource ID"),
+    resource_id: str = typer.Argument(..., help="Resource ID"),
 ) -> None:
     """Toggle resource active status."""
     console = get_console()
@@ -177,7 +176,7 @@ def resources_toggle(
             raise typer.Exit(1)
         assert len(this_status) == 1, "Multiple resources with same ID found"
         assert isinstance(this_status[0], dict)
-        activate = not this_status[0].get("isActive")
+        activate = not this_status[0].get("enabled")
         result = make_authenticated_request("POST", f"/resources/{resource_id}/toggle", params={"activate": activate})
         console.print("[green]✓ Resource toggled successfully![/green]")
         print_json(result, "Resource Status")
