@@ -36,7 +36,7 @@ class TestPromptsCommands:
 
     def test_prompts_list_success(self, mock_console) -> None:
         """Test prompts list command."""
-        mock_prompts = [{"id": 1, "name": "prompt1", "description": "desc1", "gateway_id": 1, "enabled": True}]
+        mock_prompts = [{"id": "one", "name": "prompt1", "description": "desc1", "gateway_id": 1, "enabled": True}]
 
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_prompts, print_table=None) as mocks:
             prompts_list(mcp_server_id=None, json_output=False)
@@ -73,7 +73,7 @@ class TestPromptsCommands:
 
     def test_prompts_list_with_active_only_true(self, mock_console) -> None:
         """Test prompts list with --active-only flag set to True."""
-        mock_prompts = [{"id": 1, "name": "prompt1", "isActive": True}]
+        mock_prompts = [{"id": "one", "name": "prompt1", "enabled": True}]
 
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_prompts, print_table=None) as mocks:
             prompts_list(mcp_server_id=None, active_only=True, json_output=False)
@@ -84,7 +84,7 @@ class TestPromptsCommands:
 
     def test_prompts_list_with_active_only_false(self, mock_console) -> None:
         """Test prompts list with --active-only flag set to False (default)."""
-        mock_prompts = [{"id": 1, "name": "prompt1", "isActive": True}, {"id": 2, "name": "prompt2", "isActive": False}]
+        mock_prompts = [{"id": "one", "name": "prompt1", "enabled": True}, {"id": "two", "name": "prompt2", "enabled": False}]
 
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_prompts, print_table=None) as mocks:
             prompts_list(mcp_server_id=None, active_only=False, json_output=False)
@@ -95,7 +95,7 @@ class TestPromptsCommands:
 
     def test_prompts_list_default_shows_all(self, mock_console) -> None:
         """Test prompts list default behavior shows all prompts."""
-        mock_prompts = [{"id": 1, "name": "prompt1", "isActive": True}, {"id": 2, "name": "prompt2", "isActive": False}]
+        mock_prompts = [{"id": "one", "name": "prompt1", "enabled": True}, {"id": "two", "name": "prompt2", "enabled": False}]
 
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_prompts, print_table=None) as mocks:
             # Call with explicit active_only=False (default value)
@@ -117,14 +117,14 @@ class TestPromptsCommands:
 
     def test_prompts_get_success(self, mock_console) -> None:
         """Test prompts get command."""
-        mock_prompt = {"id": 1, "name": "test"}
+        mock_prompt = {"id": "one", "name": "test"}
 
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_prompt, print_json=None):
-            prompts_get(prompt_id=1)
+            prompts_get(prompt_id="one")
 
     def test_prompts_create_from_file(self, mock_console) -> None:
         """Test prompts create from file."""
-        mock_result = {"id": 1, "name": "new_prompt"}
+        mock_result = {"id": "one", "name": "new_prompt"}
 
         with tempfile.TemporaryDirectory() as temp_dir:
             data_file = Path(temp_dir) / "prompt.json"
@@ -141,14 +141,14 @@ class TestPromptsCommands:
 
     def test_prompts_create_interactive(self, mock_console) -> None:
         """Test prompts create interactive mode."""
-        mock_result = {"id": 1, "name": "new_prompt"}
+        mock_result = {"id": "one", "name": "new_prompt"}
 
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, prompt_for_schema={"name": "test"}, make_authenticated_request=mock_result, print_json=None):
             prompts_create(data_file=None, name=None, description=None)
 
     def test_prompts_create_with_options(self, mock_console) -> None:
         """Test prompts create with command-line options."""
-        mock_result = {"id": 1, "name": "new_prompt"}
+        mock_result = {"id": "one", "name": "new_prompt"}
 
         with patch_functions(
             "cforge.commands.resources.prompts", get_console=mock_console, prompt_for_schema={"name": "test", "description": "desc"}, make_authenticated_request=mock_result, print_json=None
@@ -162,41 +162,41 @@ class TestPromptsCommands:
 
     def test_prompts_update_success(self, mock_console) -> None:
         """Test prompts update command."""
-        mock_result = {"id": 1, "name": "updated"}
+        mock_result = {"id": "one", "name": "updated"}
 
         with tempfile.TemporaryDirectory() as temp_dir:
             data_file = Path(temp_dir) / "update.json"
             data_file.write_text(json.dumps({"description": "updated desc"}))
 
             with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_result, print_json=None):
-                prompts_update(prompt_id=1, data_file=data_file)
+                prompts_update(prompt_id="one", data_file=data_file)
 
     def test_prompts_update_file_not_found(self, mock_console) -> None:
         """Test prompts update with missing file."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console):
             with pytest.raises(typer.Exit):
-                prompts_update(prompt_id=1, data_file=Path("/nonexistent.json"))
+                prompts_update(prompt_id="one", data_file=Path("/nonexistent.json"))
 
     def test_prompts_update_prompt_for_schema(self, mock_console) -> None:
         """Test prompts update with interactive schema prompt."""
         with patch_functions("cforge.commands.resources.prompts", make_authenticated_request=None, print_json=None, get_console=mock_console) as mocks:
             update_body = {"name": "updated"}
             with patch("cforge.commands.resources.prompts.prompt_for_schema", return_value=update_body):
-                prompts_update(prompt_id=1, data_file=None)
-                mocks.make_authenticated_request.assert_called_once_with("PUT", "/prompts/1", json_data=update_body)
+                prompts_update(prompt_id="one", data_file=None)
+                mocks.make_authenticated_request.assert_called_once_with("PUT", "/prompts/one", json_data=update_body)
 
     def test_prompts_delete_with_confirmation(self, mock_console) -> None:
         """Test prompts delete with confirmation."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=None):
             with patch("cforge.commands.resources.prompts.typer.confirm", return_value=True):
-                prompts_delete(prompt_id=1, confirm=False)
+                prompts_delete(prompt_id="one", confirm=False)
 
     def test_prompts_delete_cancelled(self, mock_console) -> None:
         """Test prompts delete cancelled."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console):
             with patch("cforge.commands.resources.prompts.typer.confirm", return_value=False):
                 with pytest.raises(typer.Exit) as exc_info:
-                    prompts_delete(prompt_id=1, confirm=False)
+                    prompts_delete(prompt_id="one", confirm=False)
 
                 # Note: Exit(0) gets caught by exception handler and converted to Exit(1)
                 assert exc_info.value.exit_code == 1
@@ -204,7 +204,7 @@ class TestPromptsCommands:
     def test_prompts_delete_with_yes_flag(self, mock_console) -> None:
         """Test prompts delete with --yes flag."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=None):
-            prompts_delete(prompt_id=1, confirm=True)
+            prompts_delete(prompt_id="one", confirm=True)
 
         # Should not prompt
         assert not any("confirm" in str(call) for call in mock_console.print.call_args_list)
@@ -216,11 +216,11 @@ class TestPromptsCommands:
             get_console=mock_console,
             print_json=None,
             make_authenticated_request={
-                "side_effect": [[{"id": 1, "name": "test", "isActive": False}], {"id": 1, "name": "test", "isActive": True}]  # GET list with include_inactive=True  # POST toggle result
+                "side_effect": [[{"id": "one", "name": "test", "enabled": False}], {"id": "one", "name": "test", "enabled": True}]  # GET list with include_inactive=True  # POST toggle result
             },
         ) as mocks:
 
-            prompts_toggle(prompt_id=1)
+            prompts_toggle(prompt_id="one")
 
             # Verify two calls were made
             assert mocks.make_authenticated_request.call_count == 2
@@ -234,7 +234,7 @@ class TestPromptsCommands:
             # Verify second call was POST with activate=True
             post_call = mocks.make_authenticated_request.call_args_list[1]
             assert post_call[0][0] == "POST"
-            assert post_call[0][1] == "/prompts/1/toggle"
+            assert post_call[0][1] == "/prompts/one/toggle"
             assert post_call[1]["params"]["activate"] is True
 
     def test_prompts_toggle_from_active_to_inactive(self, mock_console) -> None:
@@ -244,11 +244,11 @@ class TestPromptsCommands:
             get_console=mock_console,
             print_json=None,
             make_authenticated_request={
-                "side_effect": [[{"id": 1, "name": "test", "isActive": True}], {"id": 1, "name": "test", "isActive": False}]  # GET list with include_inactive=True  # POST toggle result
+                "side_effect": [[{"id": "one", "name": "test", "enabled": True}], {"id": "one", "name": "test", "enabled": False}]  # GET list with include_inactive=True  # POST toggle result
             },
         ) as mocks:
 
-            prompts_toggle(prompt_id=1)
+            prompts_toggle(prompt_id="one")
 
             # Verify two calls were made
             assert mocks.make_authenticated_request.call_count == 2
@@ -262,7 +262,7 @@ class TestPromptsCommands:
             # Verify second call was POST with activate=False
             post_call = mocks.make_authenticated_request.call_args_list[1]
             assert post_call[0][0] == "POST"
-            assert post_call[0][1] == "/prompts/1/toggle"
+            assert post_call[0][1] == "/prompts/one/toggle"
             assert post_call[1]["params"]["activate"] is False
 
     def test_prompts_toggle_detects_current_status(self, mock_console) -> None:
@@ -271,10 +271,10 @@ class TestPromptsCommands:
             "cforge.commands.resources.prompts",
             get_console=mock_console,
             print_json=None,
-            make_authenticated_request={"side_effect": [[{"id": 1, "name": "test", "isActive": True}], {"id": 1, "name": "test", "isActive": False}]},
+            make_authenticated_request={"side_effect": [[{"id": "one", "name": "test", "enabled": True}], {"id": "one", "name": "test", "enabled": False}]},
         ) as mocks:
 
-            prompts_toggle(prompt_id=1)
+            prompts_toggle(prompt_id="one")
 
             # Verify GET list was called first to detect current status
             calls = mocks.make_authenticated_request.call_args_list
@@ -285,10 +285,10 @@ class TestPromptsCommands:
 
     def test_prompts_toggle_prompt_not_found(self, mock_console) -> None:
         """Test toggle command error when prompt is not found in list."""
-        with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=[{"id": 2, "name": "other", "isActive": True}]) as mocks:
+        with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=[{"id": "two", "name": "other", "enabled": True}]) as mocks:
 
             with pytest.raises(typer.Exit) as exc_info:
-                prompts_toggle(prompt_id=1)
+                prompts_toggle(prompt_id="one")
 
             # Verify error was raised
             assert exc_info.value.exit_code == 1
@@ -301,7 +301,7 @@ class TestPromptsCommands:
         mock_result = {"result": "success"}
 
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_result, print_json=None):
-            prompts_execute(prompt_id=1, data_file=None)
+            prompts_execute(prompt_id="one", data_file=None)
 
     def test_prompts_execute_with_data_file(self, mock_console) -> None:
         """Test prompts execute with data file."""
@@ -312,7 +312,7 @@ class TestPromptsCommands:
             data_file.write_text(json.dumps({"arg1": "value1"}))
 
             with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request=mock_result, print_json=None) as mocks:
-                prompts_execute(prompt_id=1, data_file=data_file)
+                prompts_execute(prompt_id="one", data_file=data_file)
 
                 # Verify data was passed
                 call_args = mocks.make_authenticated_request.call_args
@@ -322,19 +322,19 @@ class TestPromptsCommands:
         """Test prompts execute with missing data file."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console):
             with pytest.raises(typer.Exit):
-                prompts_execute(prompt_id=1, data_file=Path("/nonexistent.json"))
+                prompts_execute(prompt_id="one", data_file=Path("/nonexistent.json"))
 
     def test_prompts_get_error(self, mock_console) -> None:
         """Test prompts get error handling."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request={"side_effect": Exception("API error")}):
             with pytest.raises(typer.Exit):
-                prompts_get(prompt_id=1)
+                prompts_get(prompt_id="one")
 
     def test_prompts_toggle_error(self, mock_console) -> None:
         """Test prompts toggle error handling."""
         with patch_functions("cforge.commands.resources.prompts", get_console=mock_console, make_authenticated_request={"side_effect": Exception("API error")}):
             with pytest.raises(typer.Exit):
-                prompts_toggle(prompt_id=1)
+                prompts_toggle(prompt_id="one")
 
 
 class TestPromptsCommandsIntegration:
@@ -432,7 +432,7 @@ class TestPromptsCommandsIntegration:
             prompts_list(mcp_server_id=None, active_only=False, json_output=True)
             all_prompts = mocks.print_json.call_args[0][0]
             prompt_id = all_prompts[0]["id"]
-            initial_status = all_prompts[0]["isActive"]
+            initial_status = all_prompts[0]["enabled"]
             assert initial_status is True, "Prompt from MCP server should start active"
             mocks.print_json.reset_mock()
 
@@ -444,7 +444,7 @@ class TestPromptsCommandsIntegration:
             prompts_list(mcp_server_id=None, active_only=False, json_output=True)
             all_prompts = mocks.print_json.call_args[0][0]
             prompt = [p for p in all_prompts if p["id"] == prompt_id][0]
-            assert prompt["isActive"] is False, "Prompt should now be inactive"
+            assert prompt["enabled"] is False, "Prompt should now be inactive"
             mocks.print_json.reset_mock()
 
             # Toggle again (should detect inactive and switch to active)
@@ -455,4 +455,4 @@ class TestPromptsCommandsIntegration:
             prompts_list(mcp_server_id=None, active_only=False, json_output=True)
             all_prompts = mocks.print_json.call_args[0][0]
             prompt = [p for p in all_prompts if p["id"] == prompt_id][0]
-            assert prompt["isActive"] is True, "Prompt should be active again"
+            assert prompt["enabled"] is True, "Prompt should be active again"

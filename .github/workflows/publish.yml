@@ -1,0 +1,25 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Build and check package
+        run: |
+          pip install twine build
+          python -m build
+          twine check dist/*
+      - name: Upload package
+        if: github.event_name == 'release'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}

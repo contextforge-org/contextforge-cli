@@ -1,3 +1,7 @@
+# setuptools-scm version file
+cforge/_version.py
+
+# General-purpose file types to ignore
 *FEATURES.md
 spec/
 stats/

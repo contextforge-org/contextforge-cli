@@ -4,7 +4,7 @@
 #     - wheel is needed by most build front-ends
 # ----------------------------------------------------------------
 [build-system]
-requires = ["setuptools>=77", "wheel"]
+requires = ["setuptools>=80", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 # ----------------------------------------------------------------
@@ -12,7 +12,7 @@ build-backend = "setuptools.build_meta"
 # ----------------------------------------------------------------
 [project]
 name = "cforge"
-version = "0.9.0"
+dynamic = ["version"]
 description = "CLI for Context Forge allowing seamless management of local or hosted MCP and A2A resources."
 keywords = ["MCP","API","gateway","proxy","tools",
   "agents","agentic ai","model context protocol","multi-agent","fastapi",
@@ -48,7 +48,9 @@ maintainers = [
 dependencies = [
     "rich>=13.9.4",
     "typer>=0.20.0",
-    "mcp-contextforge-gateway>=0.9.0",
+    # Temporary: Install from github until >=0.9.0 is pushed to PyPI
+    # "mcp-contextforge-gateway>=0.9.0",
+    "mcp-contextforge-gateway@git+https://github.com/IBM/mcp-context-forge.git@a43f225",
 ]
 
 # ----------------------------------------------------------------
@@ -56,50 +58,11 @@ dependencies = [
 # ----------------------------------------------------------------
 [project.optional-dependencies]
 dev = [
-    # "autoflake>=2.3.1",
-    # "bandit>=1.8.6",
-    # "black>=25.9.0",
-    # "bump2version>=1.0.1",
-    # "check-manifest>=0.50",
-    # "code2flow>=2.5.1",
-    # "cookiecutter>=2.6.0",
-    # "coverage>=7.10.7",
-    # "coverage-badge>=1.1.2",
-    # "darglint>=1.8.1",
-    # "dlint>=0.16.0",
-    # "dodgy>=0.2.1",
-    # "fawltydeps>=0.20.0",
-    # "flake8>=7.3.0",
-    # "importchecker>=3.0",
-    # "interrogate>=1.7.0",
-    # "isort>=6.1.0",
-    # "mypy>=1.18.2",
-    # "pip-licenses>=5.0.0",
-    # "pip_audit>=2.9.0",
-    # "pre-commit>=4.3.0",
-    # "prospector[with_everything]>=1.17.3",
-    # "pydocstyle>=6.3.0",
-    # "pylint>=3.3.9",
-    # "pylint-pydantic>=0.3.5",
-    # "pyrefly>=0.35.0",
-    # "pyright>=1.1.406",
-    # "pyroma>=5.0",
-    # "pyspelling>=2.11",
     "pytest>=8.4.2",
-    # "pytest-asyncio>=1.2.0",
     "pytest-cov>=7.0.0",
     "pytest-html>=3.1.1",
-    # "pytest-env>=1.1.5",
-    # "pytest-examples>=0.0.18",
-    # "pytest-httpx>=0.35.0",
-    # "pytest-integration-mark>=0.2.0",
-    # "pytest-md-report>=0.7.0",
-    # "pytest-rerunfailures>=16.0.1",
-    # "pytest-timeout>=2.4.0",
-    # "pytest-trio>=0.8.0",
-    # "pytest-xdist>=3.8.0",
-    # "ruff>=0.13.3",
-    # "uv>=0.8.23",
+    "twine>=6.2.0",
+    "build>=1.3.0",
 ]
 
 
@@ -140,6 +103,9 @@ exclude = ["tests*"]
 cforge = [
   "py.typed",
 ]
+
+[tool.setuptools_scm]
+version_file = "cforge/_version.py"
 
 # --------------------------------------------------------------------
 #  🛠  Tool configurations (black, mypy, etc.)
@@ -384,6 +350,8 @@ filterwarnings = [
   "ignore:Passing 'msg' argument to .*\\.cancel\\(\\) is deprecated:DeprecationWarning", # From 3rd party libraries
   "ignore: Using `@model_validator` with mode='after' on a classmethod.*:DeprecationWarning", # From 3rd party libraries
   "ignore: Unclosed <MemoryObjectReceiveStream.*:ResourceWarning", # From async client calls
+  "ignore: Support for class-based `config` is deprecated.*", # Pydantic upgraded needed upstream
+  "ignore: `regex` has been deprecated, please use `pattern` instead", # FastAPI upgraded needed upstream
 ]
 
 # ── fawltydeps ─────────────────────────────────────────────────────

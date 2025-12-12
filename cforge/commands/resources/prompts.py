@@ -61,7 +61,7 @@ def prompts_list(
 
 
 def prompts_get(
-    prompt_id: int = typer.Argument(..., help="Prompt ID"),
+    prompt_id: str = typer.Argument(..., help="Prompt ID"),
 ) -> None:
     """Get details of a specific prompt."""
     try:
@@ -114,7 +114,7 @@ def prompts_create(
 
 
 def prompts_update(
-    prompt_id: int = typer.Argument(..., help="Prompt ID"),
+    prompt_id: str = typer.Argument(..., help="Prompt ID"),
     data_file: Optional[Path] = typer.Argument(None, help="JSON file containing updated prompt data (interactive mode if not provided)"),
 ) -> None:
     """Update an existing prompt."""
@@ -139,7 +139,7 @@ def prompts_update(
 
 
 def prompts_delete(
-    prompt_id: int = typer.Argument(..., help="Prompt ID"),
+    prompt_id: str = typer.Argument(..., help="Prompt ID"),
     confirm: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ) -> None:
     """Delete a prompt."""
@@ -160,7 +160,7 @@ def prompts_delete(
 
 
 def prompts_toggle(
-    prompt_id: int = typer.Argument(..., help="Prompt ID"),
+    prompt_id: str = typer.Argument(..., help="Prompt ID"),
 ) -> None:
     """Toggle prompt active status."""
     console = get_console()
@@ -174,7 +174,7 @@ def prompts_toggle(
             raise typer.Exit(1)
         assert len(this_status) == 1, "Multiple prompts with same ID found"
         assert isinstance(this_status[0], dict)
-        activate = not this_status[0].get("isActive")
+        activate = not this_status[0].get("enabled")
         result = make_authenticated_request("POST", f"/prompts/{prompt_id}/toggle", params={"activate": activate})
         console.print("[green]✓ Prompt toggled successfully![/green]")
         print_json(result, "Prompt Status")
@@ -184,7 +184,7 @@ def prompts_toggle(
 
 
 def prompts_execute(
-    prompt_id: int = typer.Argument(..., help="Prompt ID"),
+    prompt_id: str = typer.Argument(..., help="Prompt ID"),
     data_file: Optional[Path] = typer.Option(None, "--data", help="JSON file containing prompt arguments"),
 ) -> None:
     """Execute a prompt with optional arguments."""
