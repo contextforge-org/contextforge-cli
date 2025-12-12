@@ -58,8 +58,7 @@ def virtual_servers_list(
                 print_table(
                     servers,
                     "Virtual Servers",
-                    ["id", "name", "description", "isActive"],
-                    {"isActive": "enabled"},
+                    ["id", "name", "description", "enabled"],
                 )
             else:
                 console.print("[yellow]No virtual servers found[/yellow]")
@@ -178,7 +177,7 @@ def virtual_servers_toggle(
     try:
         current_status = make_authenticated_request("GET", f"/servers/{server_id}")
         assert isinstance(current_status, dict)
-        if current_status["isActive"]:
+        if current_status["enabled"]:
             activate = False
         else:
             activate = True

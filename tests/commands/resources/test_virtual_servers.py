@@ -75,7 +75,7 @@ class TestVirtualServersCommands:
 
     def test_virtual_servers_list_with_active_only_true(self, mock_console) -> None:
         """Test virtual-servers list with --active-only flag set to True."""
-        mock_servers = [{"id": "vs-1234", "name": "server1", "isActive": True}]
+        mock_servers = [{"id": "vs-1234", "name": "server1", "enabled": True}]
 
         with patch("cforge.commands.resources.virtual_servers.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.virtual_servers.make_authenticated_request", return_value=mock_servers) as mock_req:
@@ -88,7 +88,7 @@ class TestVirtualServersCommands:
 
     def test_virtual_servers_list_with_active_only_false(self, mock_console) -> None:
         """Test virtual-servers list with --active-only flag set to False (default)."""
-        mock_servers = [{"id": "vs-1234", "name": "server1", "isActive": True}, {"id": "vs-5678", "name": "server2", "isActive": False}]
+        mock_servers = [{"id": "vs-1234", "name": "server1", "enabled": True}, {"id": "vs-5678", "name": "server2", "enabled": False}]
 
         with patch("cforge.commands.resources.virtual_servers.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.virtual_servers.make_authenticated_request", return_value=mock_servers) as mock_req:
@@ -101,7 +101,7 @@ class TestVirtualServersCommands:
 
     def test_virtual_servers_list_default_shows_all(self, mock_console) -> None:
         """Test virtual-servers list default behavior shows all servers."""
-        mock_servers = [{"id": "vs-1234", "name": "server1", "isActive": True}, {"id": "vs-5678", "name": "server2", "isActive": False}]
+        mock_servers = [{"id": "vs-1234", "name": "server1", "enabled": True}, {"id": "vs-5678", "name": "server2", "enabled": False}]
 
         with patch("cforge.commands.resources.virtual_servers.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.virtual_servers.make_authenticated_request", return_value=mock_servers) as mock_req:
@@ -216,7 +216,7 @@ class TestVirtualServersCommands:
         with patch("cforge.commands.resources.virtual_servers.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.virtual_servers.make_authenticated_request") as mock_req:
                 # First call (GET) returns inactive server, second call (POST) returns active server
-                mock_req.side_effect = [{"id": "vs-123", "name": "test", "isActive": False}, {"id": "vs-123", "name": "test", "isActive": True}]  # GET current status  # POST toggle result
+                mock_req.side_effect = [{"id": "vs-123", "name": "test", "enabled": False}, {"id": "vs-123", "name": "test", "enabled": True}]  # GET current status  # POST toggle result
                 with patch("cforge.commands.resources.virtual_servers.print_json"):
                     virtual_servers_toggle(server_id="vs-123")
 
@@ -239,7 +239,7 @@ class TestVirtualServersCommands:
         with patch("cforge.commands.resources.virtual_servers.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.virtual_servers.make_authenticated_request") as mock_req:
                 # First call (GET) returns active server, second call (POST) returns inactive server
-                mock_req.side_effect = [{"id": "vs-123", "name": "test", "isActive": True}, {"id": "vs-123", "name": "test", "isActive": False}]  # GET current status  # POST toggle result
+                mock_req.side_effect = [{"id": "vs-123", "name": "test", "enabled": True}, {"id": "vs-123", "name": "test", "enabled": False}]  # GET current status  # POST toggle result
                 with patch("cforge.commands.resources.virtual_servers.print_json"):
                     virtual_servers_toggle(server_id="vs-123")
 
@@ -262,7 +262,7 @@ class TestVirtualServersCommands:
         with patch("cforge.commands.resources.virtual_servers.get_console", return_value=mock_console):
             with patch("cforge.commands.resources.virtual_servers.make_authenticated_request") as mock_req:
                 # Mock a server that is currently active
-                mock_req.side_effect = [{"id": "vs-123", "name": "test", "isActive": True}, {"id": "vs-123", "name": "test", "isActive": False}]
+                mock_req.side_effect = [{"id": "vs-123", "name": "test", "enabled": True}, {"id": "vs-123", "name": "test", "enabled": False}]
                 with patch("cforge.commands.resources.virtual_servers.print_json"):
                     virtual_servers_toggle(server_id="vs-123")
 
@@ -576,7 +576,7 @@ class TestVirtualpServersCommandsIntegration:
             ):
                 virtual_servers_create(data_file=None, name=None, description=None)
             virtual_server_id = mocks.print_json.call_args[0][0]["id"]
-            initial_status = mocks.print_json.call_args[0][0]["isActive"]
+            initial_status = mocks.print_json.call_args[0][0]["enabled"]
             assert initial_status is True, "New virtual server should start active"
             mocks.print_json.reset_mock()
 
@@ -586,7 +586,7 @@ class TestVirtualpServersCommandsIntegration:
 
             # Verify status changed by getting it
             virtual_servers_get(virtual_server_id)
-            current_status = mocks.print_json.call_args[0][0]["isActive"]
+            current_status = mocks.print_json.call_args[0][0]["enabled"]
             assert current_status is False, "Virtual server should now be inactive"
             mocks.print_json.reset_mock()
 
@@ -596,7 +596,7 @@ class TestVirtualpServersCommandsIntegration:
 
             # Verify status changed back
             virtual_servers_get(virtual_server_id)
-            final_status = mocks.print_json.call_args[0][0]["isActive"]
+            final_status = mocks.print_json.call_args[0][0]["enabled"]
             assert final_status is True, "Virtual server should be active again"
 
             # Clean up
