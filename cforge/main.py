@@ -30,7 +30,16 @@ import typer
 
 # First-Party
 from cforge.common import get_app
-from cforge.commands.deploy.deploy import deploy
+from cforge.commands.deploy.deploy import (
+    build,
+    certs,
+    deploy,
+    destroy,
+    generate,
+    shared_callback,
+    validate,
+    verify,
+)
 from cforge.commands.server.serve import serve
 from cforge.commands.settings.login import login
 from cforge.commands.settings.logout import logout
@@ -122,7 +131,19 @@ app.command(rich_help_panel="Settings")(version)
 # Deploy command (hidden stub for future use)
 # ---------------------------------------------------------------------------
 
-app.command(hidden=True, rich_help_panel="Deployment")(deploy)
+deploy_app = typer.Typer(help="Manage contextforge and MCP server deployments")
+app.add_typer(deploy_app, name="deploy", rich_help_panel="Deployment")
+
+# All sub-commands share a callback
+deploy_app.callback(invoke_without_command=True)(shared_callback)
+
+deploy_app.command("run")(deploy)
+deploy_app.command("build")(build)
+deploy_app.command("certs")(certs)
+deploy_app.command("destroy")(destroy)
+deploy_app.command("generate")(generate)
+deploy_app.command("validate")(validate)
+deploy_app.command("verify")(verify)
 
 # ---------------------------------------------------------------------------
 # Tools command group
