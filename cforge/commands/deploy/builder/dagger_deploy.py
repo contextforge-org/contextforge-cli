@@ -31,7 +31,6 @@ except ImportError:
     dag = None  # type: ignore
 
 # Third-Party
-from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # First-Party
@@ -52,8 +51,6 @@ from cforge.commands.deploy.builder.common import (
 from cforge.commands.deploy.builder.common import copy_env_template as copy_template
 from cforge.commands.deploy.builder.pipeline import CICDModule
 from cforge.commands.deploy.builder.schema import BuildableConfig, MCPStackConfig
-
-console = Console()
 
 
 class MCPStackDagger(CICDModule):
@@ -100,16 +97,16 @@ class MCPStackDagger(CICDModule):
                         except Exception as e:
                             progress.update(task, completed=1, description="[red]✗ Failed gateway[/red]")
                             # Print full error after progress bar closes
-                            self.console.print("\n[red bold]Gateway build failed:[/red bold]")
-                            self.console.print(f"[red]{type(e).__name__}: {str(e)}[/red]")
+                            self.get_console().print("\n[red bold]Gateway build failed:[/red bold]")
+                            self.get_console().print(f"[red]{type(e).__name__}: {str(e)}[/red]")
                             if self.verbose:
                                 # Standard
                                 import traceback
 
-                                self.console.print(f"[dim]{traceback.format_exc()}[/dim]")
+                                self.get_console().print(f"[dim]{traceback.format_exc()}[/dim]")
                             raise
                 elif self.verbose:
-                    self.console.print("[dim]Skipping gateway build (using pre-built image)[/dim]")
+                    self.get_console().print("[dim]Skipping gateway build (using pre-built image)[/dim]")
 
             # Build plugins
             plugins = config.plugins
@@ -118,7 +115,7 @@ class MCPStackDagger(CICDModule):
                 plugins = [p for p in plugins if p.name in specific_plugins]
 
             if not plugins:
-                self.console.print("[yellow]No plugins to build[/yellow]")
+                self.get_console().print("[yellow]No plugins to build[/yellow]")
                 return
 
             with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=self.console) as progress:
@@ -140,13 +137,13 @@ class MCPStackDagger(CICDModule):
                     except Exception as e:
                         progress.update(task, completed=1, description=f"[red]✗ Failed {plugin_name}[/red]")
                         # Print full error after progress bar closes
-                        self.console.print(f"\n[red bold]Plugin '{plugin_name}' build failed:[/red bold]")
-                        self.console.print(f"[red]{type(e).__name__}: {str(e)}[/red]")
+                        self.get_console().print(f"\n[red bold]Plugin '{plugin_name}' build failed:[/red bold]")
+                        self.get_console().print(f"[red]{type(e).__name__}: {str(e)}[/red]")
                         if self.verbose:
                             # Standard
                             import traceback
 
-                            self.console.print(f"[dim]{traceback.format_exc()}[/dim]")
+                            self.get_console().print(f"[dim]{traceback.format_exc()}[/dim]")
                         raise
 
     async def generate_certificates(self, config_file: str) -> None:
@@ -173,13 +170,13 @@ class MCPStackDagger(CICDModule):
         if use_cert_manager:
             # Skip local generation - cert-manager will handle certificate creation
             if self.verbose:
-                self.console.print("[blue]Using cert-manager for certificate management[/blue]")
-                self.console.print("[dim]Skipping local certificate generation (cert-manager will create certificates)[/dim]")
+                self.get_console().print("[blue]Using cert-manager for certificate management[/blue]")
+                self.get_console().print("[dim]Skipping local certificate generation (cert-manager will create certificates)[/dim]")
             return
 
         # Local certificate generation (backward compatibility)
         if self.verbose:
-            self.console.print("[blue]Generating mTLS certificates locally...[/blue]")
+            self.get_console().print("[blue]Generating mTLS certificates locally...[/blue]")
 
         # Use Dagger container to run certificate generation
         async with dagger.connection(dagger.Config(workdir=str(Path.cwd()))):
@@ -214,20 +211,20 @@ class MCPStackDagger(CICDModule):
                 output = container.directory("/workspace/certs")
                 await output.export("./certs")
             except dagger.ExecError as e:
-                self.console.print(f"Dagger Exec Error: {e.message}")
-                self.console.print(f"Exit Code: {e.exit_code}")
-                self.console.print(f"Stderr: {e.stderr}")
+                self.get_console().print(f"Dagger Exec Error: {e.message}")
+                self.get_console().print(f"Exit Code: {e.exit_code}")
+                self.get_console().print(f"Stderr: {e.stderr}")
                 raise
             except dagger.QueryError as e:
-                self.console.print(f"Dagger Query Error: {e.errors}")
-                self.console.print(f"Debug Query: {e.debug_query()}")
+                self.get_console().print(f"Dagger Query Error: {e.errors}")
+                self.get_console().print(f"Debug Query: {e.debug_query()}")
                 raise
             except Exception as e:
-                self.console.print(f"An unexpected error occurred: {e}")
+                self.get_console().print(f"An unexpected error occurred: {e}")
                 raise
 
         if self.verbose:
-            self.console.print("[green]✓ Certificates generated locally[/green]")
+            self.get_console().print("[green]✓ Certificates generated locally[/green]")
 
     async def deploy(self, config_file: str, dry_run: bool = False, skip_build: bool = False, skip_certs: bool = False, output_dir: Optional[str] = None) -> None:
         """Deploy MCP stack.
@@ -259,13 +256,13 @@ class MCPStackDagger(CICDModule):
             await self.generate_certificates(config_file)
         elif not skip_certs and not mtls_needed:
             if self.verbose:
-                self.console.print("[dim]Skipping certificate generation (mTLS disabled)[/dim]")
+                self.get_console().print("[dim]Skipping certificate generation (mTLS disabled)[/dim]")
 
         # Generate manifests
         manifests_dir = self.generate_manifests(config_file, output_dir=output_dir)
 
         if dry_run:
-            self.console.print(f"[yellow]Dry-run: Manifests generated in {manifests_dir}[/yellow]")
+            self.get_console().print(f"[yellow]Dry-run: Manifests generated in {manifests_dir}[/yellow]")
             return
 
         # Apply deployment
@@ -280,26 +277,26 @@ class MCPStackDagger(CICDModule):
                 else:
                     raise ValueError(f"Unsupported deployment type: {deployment_type}")
             except dagger.ExecError as e:
-                self.console.print(f"Dagger Exec Error: {e.message}")
-                self.console.print(f"Exit Code: {e.exit_code}")
-                self.console.print(f"Stderr: {e.stderr}")
+                self.get_console().print(f"Dagger Exec Error: {e.message}")
+                self.get_console().print(f"Exit Code: {e.exit_code}")
+                self.get_console().print(f"Stderr: {e.stderr}")
                 raise
             except dagger.QueryError as e:
-                self.console.print(f"Dagger Query Error: {e.errors}")
-                self.console.print(f"Debug Query: {e.debug_query()}")
+                self.get_console().print(f"Dagger Query Error: {e.errors}")
+                self.get_console().print(f"Debug Query: {e.debug_query()}")
                 raise
             except Exception as e:
                 # Extract detailed error from Dagger exception
                 error_msg = str(e)
-                self.console.print("\n[red bold]Deployment failed:[/red bold]")
-                self.console.print(f"[red]{error_msg}[/red]")
+                self.get_console().print("\n[red bold]Deployment failed:[/red bold]")
+                self.get_console().print(f"[red]{error_msg}[/red]")
 
                 # Check if it's a compose-specific error and try to provide more context
                 if "compose" in error_msg.lower() and self.verbose:
-                    self.console.print("\n[yellow]Hint:[/yellow] Check the generated docker-compose.yaml:")
-                    self.console.print(f"[dim]  {manifests_dir}/docker-compose.yaml[/dim]")
-                    self.console.print("[yellow]Try running manually:[/yellow]")
-                    self.console.print(f"[dim]  cd {manifests_dir} && docker compose up[/dim]")
+                    self.get_console().print("\n[yellow]Hint:[/yellow] Check the generated docker-compose.yaml:")
+                    self.get_console().print(f"[dim]  {manifests_dir}/docker-compose.yaml[/dim]")
+                    self.get_console().print("[yellow]Try running manually:[/yellow]")
+                    self.get_console().print(f"[dim]  cd {manifests_dir} && docker compose up[/dim]")
 
                 raise
 
@@ -315,7 +312,7 @@ class MCPStackDagger(CICDModule):
         deployment_type = config.deployment.type
 
         if self.verbose:
-            self.console.print("[blue]Verifying deployment...[/blue]")
+            self.get_console().print("[blue]Verifying deployment...[/blue]")
 
         async with dagger.connection(dagger.Config(workdir=str(Path.cwd()))):
             if deployment_type == "kubernetes":
@@ -333,7 +330,7 @@ class MCPStackDagger(CICDModule):
         deployment_type = config.deployment.type
 
         if self.verbose:
-            self.console.print("[blue]Destroying deployment...[/blue]")
+            self.get_console().print("[blue]Destroying deployment...[/blue]")
 
         async with dagger.connection(dagger.Config(workdir=str(Path.cwd()))):
             if deployment_type == "kubernetes":
@@ -472,7 +469,7 @@ class MCPStackDagger(CICDModule):
         image_tag = handle_registry_operations(component, component_name, image_tag, container_runtime, verbose=self.verbose)
 
         if self.verbose:
-            self.console.print(f"[green]✓ Built {component_name} -> {image_tag}[/green]")
+            self.get_console().print(f"[green]✓ Built {component_name} -> {image_tag}[/green]")
 
     async def _deploy_kubernetes(self, manifests_dir: Path) -> None:
         """Deploy to Kubernetes using kubectl.
@@ -507,7 +504,7 @@ class MCPStackDagger(CICDModule):
         """
         namespace = config.deployment.namespace or "mcp-gateway"
         output = verify_kubernetes(namespace, wait=wait, timeout=timeout, verbose=self.verbose)
-        self.console.print(output)
+        self.get_console().print(output)
 
     async def _verify_compose(self, config: MCPStackConfig, wait: bool = False, timeout: int = 300) -> None:
         """Verify Docker Compose deployment health.
@@ -525,7 +522,7 @@ class MCPStackDagger(CICDModule):
         output_dir = getattr(self, "_last_output_dir", deploy_dir / "manifests" / "compose")
         compose_file = output_dir / "docker-compose.yaml"
         output = verify_compose(compose_file, verbose=self.verbose)
-        self.console.print(output)
+        self.get_console().print(output)
 
     async def _destroy_kubernetes(self, config: MCPStackConfig) -> None:
         """Destroy Kubernetes deployment.

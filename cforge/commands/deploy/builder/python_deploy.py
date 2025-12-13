@@ -19,7 +19,6 @@ import subprocess  # nosec B404
 from typing import List, Optional
 
 # Third-Party
-from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # First-Party
@@ -40,8 +39,7 @@ from cforge.commands.deploy.builder.common import (
 from cforge.commands.deploy.builder.common import copy_env_template as copy_template
 from cforge.commands.deploy.builder.pipeline import CICDModule
 from cforge.commands.deploy.builder.schema import BuildableConfig, MCPStackConfig
-
-console = Console()
+from cforge.common import get_console
 
 
 class MCPStackPython(CICDModule):
@@ -90,7 +88,7 @@ class MCPStackPython(CICDModule):
         if not plugins_only:
             gateway = config.gateway
             if gateway.repo:
-                with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=self.console) as progress:
+                with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=get_console()) as progress:
                     task = progress.add_task("Building gateway...", total=None)
                     try:
                         self._build_component(gateway, config, "gateway", no_cache=no_cache)
@@ -98,16 +96,16 @@ class MCPStackPython(CICDModule):
                     except Exception as e:
                         progress.update(task, completed=1, description="[red]✗ Failed gateway[/red]")
                         # Print full error after progress bar closes
-                        self.console.print("\n[red bold]Gateway build failed:[/red bold]")
-                        self.console.print(f"[red]{type(e).__name__}: {str(e)}[/red]")
+                        get_console().print("\n[red bold]Gateway build failed:[/red bold]")
+                        get_console().print(f"[red]{type(e).__name__}: {str(e)}[/red]")
                         if self.verbose:
                             # Standard
                             import traceback
 
-                            self.console.print(f"[dim]{traceback.format_exc()}[/dim]")
+                            get_console().print(f"[dim]{traceback.format_exc()}[/dim]")
                         raise
             elif self.verbose:
-                self.console.print("[dim]Skipping gateway build (using pre-built image)[/dim]")
+                get_console().print("[dim]Skipping gateway build (using pre-built image)[/dim]")
 
         # Build plugins
         plugins = config.plugins
@@ -116,10 +114,10 @@ class MCPStackPython(CICDModule):
             plugins = [p for p in plugins if p.name in specific_plugins]
 
         if not plugins:
-            self.console.print("[yellow]No plugins to build[/yellow]")
+            get_console().print("[yellow]No plugins to build[/yellow]")
             return
 
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=self.console) as progress:
+        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=get_console()) as progress:
 
             for plugin in plugins:
                 plugin_name = plugin.name
@@ -138,13 +136,13 @@ class MCPStackPython(CICDModule):
                 except Exception as e:
                     progress.update(task, completed=1, description=f"[red]✗ Failed {plugin_name}[/red]")
                     # Print full error after progress bar closes
-                    self.console.print(f"\n[red bold]Plugin '{plugin_name}' build failed:[/red bold]")
-                    self.console.print(f"[red]{type(e).__name__}: {str(e)}[/red]")
+                    get_console().print(f"\n[red bold]Plugin '{plugin_name}' build failed:[/red bold]")
+                    get_console().print(f"[red]{type(e).__name__}: {str(e)}[/red]")
                     if self.verbose:
                         # Standard
                         import traceback
 
-                        self.console.print(f"[dim]{traceback.format_exc()}[/dim]")
+                        get_console().print(f"[dim]{traceback.format_exc()}[/dim]")
                     raise
 
     async def generate_certificates(self, config_file: str) -> None:
@@ -170,13 +168,13 @@ class MCPStackPython(CICDModule):
         if use_cert_manager:
             # Skip local generation - cert-manager will handle certificate creation
             if self.verbose:
-                self.console.print("[blue]Using cert-manager for certificate management[/blue]")
-                self.console.print("[dim]Skipping local certificate generation (cert-manager will create certificates)[/dim]")
+                get_console().print("[blue]Using cert-manager for certificate management[/blue]")
+                get_console().print("[dim]Skipping local certificate generation (cert-manager will create certificates)[/dim]")
             return
 
         # Local certificate generation (backward compatibility)
         if self.verbose:
-            self.console.print("[blue]Generating mTLS certificates locally...[/blue]")
+            get_console().print("[blue]Generating mTLS certificates locally...[/blue]")
 
         # Check if make is available
         if not shutil.which("make"):
@@ -195,7 +193,7 @@ class MCPStackPython(CICDModule):
             self._run_command(["make", "certs-mcp-plugin", f"PLUGIN_NAME={plugin_name}", f"MCP_CERT_DAYS={validity_days}"])
 
         if self.verbose:
-            self.console.print("[green]✓ Certificates generated locally[/green]")
+            get_console().print("[green]✓ Certificates generated locally[/green]")
 
     async def deploy(self, config_file: str, dry_run: bool = False, skip_build: bool = False, skip_certs: bool = False, output_dir: Optional[str] = None) -> None:
         """Deploy MCP stack.
@@ -225,13 +223,13 @@ class MCPStackPython(CICDModule):
             await self.generate_certificates(config_file)
         elif not skip_certs and not mtls_needed:
             if self.verbose:
-                self.console.print("[dim]Skipping certificate generation (mTLS disabled)[/dim]")
+                get_console().print("[dim]Skipping certificate generation (mTLS disabled)[/dim]")
 
         # Generate manifests
         manifests_dir = self.generate_manifests(config_file, output_dir=output_dir)
 
         if dry_run:
-            self.console.print(f"[yellow]Dry-run: Manifests generated in {manifests_dir}[/yellow]")
+            get_console().print(f"[yellow]Dry-run: Manifests generated in {manifests_dir}[/yellow]")
             return
 
         # Apply deployment
@@ -256,7 +254,7 @@ class MCPStackPython(CICDModule):
         deployment_type = config.deployment.type
 
         if self.verbose:
-            self.console.print("[blue]Verifying deployment...[/blue]")
+            get_console().print("[blue]Verifying deployment...[/blue]")
 
         if deployment_type == "kubernetes":
             self._verify_kubernetes(config, wait=wait, timeout=timeout)
@@ -273,7 +271,7 @@ class MCPStackPython(CICDModule):
         deployment_type = config.deployment.type
 
         if self.verbose:
-            self.console.print("[blue]Destroying deployment...[/blue]")
+            get_console().print("[blue]Destroying deployment...[/blue]")
 
         if deployment_type == "kubernetes":
             self._destroy_kubernetes(config)
@@ -423,7 +421,7 @@ class MCPStackPython(CICDModule):
             subprocess.CalledProcessError: If command fails
         """
         if self.verbose:
-            self.console.print(f"[dim]Running: {' '.join(cmd)}[/dim]")
+            get_console().print(f"[dim]Running: {' '.join(cmd)}[/dim]")
 
         result = subprocess.run(cmd, cwd=cwd, capture_output=capture_output, text=True, check=True)  # nosec B603, B607
 
@@ -458,13 +456,13 @@ class MCPStackPython(CICDModule):
         # Clone or update repo
         if (clone_dir / ".git").exists():
             if self.verbose:
-                self.console.print(f"[dim]Updating {component_name} repository...[/dim]")
+                get_console().print(f"[dim]Updating {component_name} repository...[/dim]")
             self._run_command(["git", "fetch", "origin", git_ref], cwd=clone_dir)
             # Checkout what we just fetched (FETCH_HEAD)
             self._run_command(["git", "checkout", "FETCH_HEAD"], cwd=clone_dir)
         else:
             if self.verbose:
-                self.console.print(f"[dim]Cloning {component_name} repository...[/dim]")
+                get_console().print(f"[dim]Cloning {component_name} repository...[/dim]")
             self._run_command(["git", "clone", "--branch", git_ref, "--depth", "1", repo, str(clone_dir)])
 
         # Determine build context (subdirectory within repo)
@@ -518,7 +516,7 @@ class MCPStackPython(CICDModule):
             copy_template(component_name, build_dir, verbose=self.verbose)
 
         if self.verbose:
-            self.console.print(f"[green]✓ Built {component_name} -> {image_tag}[/green]")
+            get_console().print(f"[green]✓ Built {component_name} -> {image_tag}[/green]")
 
     def _deploy_kubernetes(self, manifests_dir: Path) -> None:
         """Deploy to Kubernetes using kubectl.
@@ -553,7 +551,7 @@ class MCPStackPython(CICDModule):
         """
         namespace = config.deployment.namespace or "mcp-gateway"
         output = verify_kubernetes(namespace, wait=wait, timeout=timeout, verbose=self.verbose)
-        self.console.print(output)
+        get_console().print(output)
 
     def _verify_compose(self, config: MCPStackConfig, wait: bool = False, timeout: int = 300) -> None:
         """Verify Docker Compose deployment health.
@@ -571,7 +569,7 @@ class MCPStackPython(CICDModule):
         output_dir = getattr(self, "_last_output_dir", deploy_dir / "manifests" / "compose")
         compose_file = output_dir / "docker-compose.yaml"
         output = verify_compose(compose_file, verbose=self.verbose)
-        self.console.print(output)
+        get_console().print(output)
 
     def _destroy_kubernetes(self, config: MCPStackConfig) -> None:
         """Destroy Kubernetes deployment.

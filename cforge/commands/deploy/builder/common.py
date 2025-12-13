@@ -37,13 +37,11 @@ from typing import List
 
 # Third-Party
 from jinja2 import Environment, FileSystemLoader
-from rich.console import Console
 import yaml
 
 # First-Party
 from cforge.commands.deploy.builder.schema import MCPStackConfig
-
-console = Console()
+from cforge.common import get_console
 
 
 def get_deploy_dir() -> Path:
@@ -472,17 +470,17 @@ def generate_kubernetes_manifests(config: MCPStackConfig, output_dir: Path, verb
                 if result.returncode == 0 and result.stdout.strip():
                     openshift_domain = result.stdout.strip()
                     if verbose:
-                        console.print(f"[dim]Auto-detected OpenShift domain: {openshift_domain}[/dim]")
+                        get_console().print(f"[dim]Auto-detected OpenShift domain: {openshift_domain}[/dim]")
                 else:
                     # Fallback to common OpenShift Local domain
                     openshift_domain = "apps-crc.testing"
                     if verbose:
-                        console.print(f"[yellow]Could not auto-detect OpenShift domain, using default: {openshift_domain}[/yellow]")
+                        get_console().print(f"[yellow]Could not auto-detect OpenShift domain, using default: {openshift_domain}[/yellow]")
             except Exception:
                 # Fallback to common OpenShift Local domain
                 openshift_domain = "apps-crc.testing"
                 if verbose:
-                    console.print(f"[yellow]Could not auto-detect OpenShift domain, using default: {openshift_domain}[/yellow]")
+                    get_console().print(f"[yellow]Could not auto-detect OpenShift domain, using default: {openshift_domain}[/yellow]")
 
         route_manifest = route_template.render(namespace=namespace, openshift_domain=openshift_domain, tls_termination=openshift_config.tls_termination)
         (output_dir / "gateway-route.yaml").write_text(route_manifest)
@@ -807,16 +805,16 @@ def handle_registry_operations(component, component_name: str, image_tag: str, c
 
     # Tag image for registry
     if verbose:
-        console.print(f"[dim]Tagging {image_tag} as {registry_image}[/dim]")
+        get_console().print(f"[dim]Tagging {image_tag} as {registry_image}[/dim]")
     tag_cmd = [container_runtime, "tag", image_tag, registry_image]
     result = subprocess.run(tag_cmd, capture_output=True, text=True, check=True)  # nosec B603, B607
     if result.stdout and verbose:
-        console.print(result.stdout)
+        get_console().print(result.stdout)
 
     # Push to registry if enabled
     if registry_config.push:
         if verbose:
-            console.print(f"[blue]Pushing {registry_image} to registry...[/blue]")
+            get_console().print(f"[blue]Pushing {registry_image} to registry...[/blue]")
 
         # Build push command with TLS options
         push_cmd = [container_runtime, "push"]
@@ -831,14 +829,14 @@ def handle_registry_operations(component, component_name: str, image_tag: str, c
         try:
             result = subprocess.run(push_cmd, capture_output=True, text=True, check=True)  # nosec B603, B607
             if result.stdout and verbose:
-                console.print(result.stdout)
-            console.print(f"[green]✓ Pushed to registry: {registry_image}[/green]")
+                get_console().print(result.stdout)
+            get_console().print(f"[green]✓ Pushed to registry: {registry_image}[/green]")
         except subprocess.CalledProcessError as e:
-            console.print(f"[red]✗ Failed to push to registry: {e}[/red]")
+            get_console().print(f"[red]✗ Failed to push to registry: {e}[/red]")
             if e.stderr:
-                console.print(f"[red]Error output: {e.stderr}[/red]")
-            console.print("[yellow]Tip: Authenticate to the registry first:[/yellow]")
-            console.print(f"  {container_runtime} login {registry_config.url}")
+                get_console().print(f"[red]Error output: {e.stderr}[/red]")
+            get_console().print("[yellow]Tip: Authenticate to the registry first:[/yellow]")
+            get_console().print(f"  {container_runtime} login {registry_config.url}")
             raise
 
     # Update component image reference to use registry path for manifests
@@ -951,17 +949,17 @@ def run_compose(compose_file: Path, args: List[str], verbose: bool = False, chec
     full_cmd = compose_cmd + ["-f", str(compose_file)] + args
 
     if verbose:
-        console.print(f"[dim]Running: {' '.join(full_cmd)}[/dim]")
+        get_console().print(f"[dim]Running: {' '.join(full_cmd)}[/dim]")
 
     try:
         result = subprocess.run(full_cmd, capture_output=True, text=True, check=check)  # nosec B603, B607
         return result
     except subprocess.CalledProcessError as e:
-        console.print("\n[red bold]Docker Compose command failed:[/red bold]")
+        get_console().print("\n[red bold]Docker Compose command failed:[/red bold]")
         if e.stdout:
-            console.print(f"[yellow]Output:[/yellow]\n{e.stdout}")
+            get_console().print(f"[yellow]Output:[/yellow]\n{e.stdout}")
         if e.stderr:
-            console.print(f"[red]Error:[/red]\n{e.stderr}")
+            get_console().print(f"[red]Error:[/red]\n{e.stderr}")
         raise RuntimeError(f"Docker Compose failed with exit code {e.returncode}") from e
 
 
@@ -990,8 +988,8 @@ def deploy_compose(compose_file: Path, verbose: bool = False) -> None:
     """
     result = run_compose(compose_file, ["up", "-d"], verbose=verbose)
     if result.stdout and verbose:
-        console.print(result.stdout)
-    console.print("[green]✓ Deployed with Docker Compose[/green]")
+        get_console().print(result.stdout)
+    get_console().print("[green]✓ Deployed with Docker Compose[/green]")
 
 
 def verify_compose(compose_file: Path, verbose: bool = False) -> str:
@@ -1048,14 +1046,14 @@ def destroy_compose(compose_file: Path, verbose: bool = False) -> None:
         True
     """
     if not compose_file.exists():
-        console.print(f"[yellow]Compose file not found: {compose_file}[/yellow]")
-        console.print("[yellow]Nothing to destroy[/yellow]")
+        get_console().print(f"[yellow]Compose file not found: {compose_file}[/yellow]")
+        get_console().print("[yellow]Nothing to destroy[/yellow]")
         return
 
     result = run_compose(compose_file, ["down", "-v"], verbose=verbose)
     if result.stdout and verbose:
-        console.print(result.stdout)
-    console.print("[green]✓ Destroyed Docker Compose deployment[/green]")
+        get_console().print(result.stdout)
+    get_console().print("[green]✓ Destroyed Docker Compose deployment[/green]")
 
 
 # Kubernetes kubectl utilities
@@ -1118,7 +1116,7 @@ def deploy_kubernetes(manifests_dir: Path, verbose: bool = False) -> None:
     for manifest in deployment_files:
         result = subprocess.run(["kubectl", "apply", "-f", str(manifest)], capture_output=True, text=True, check=False)  # nosec B603, B607
         if result.stdout and verbose:
-            console.print(result.stdout)
+            get_console().print(result.stdout)
         if result.returncode != 0:
             raise RuntimeError(f"kubectl apply failed: {result.stderr}")
 
@@ -1127,13 +1125,13 @@ def deploy_kubernetes(manifests_dir: Path, verbose: bool = False) -> None:
     if cert_manager_certs.exists():
         result = subprocess.run(["kubectl", "apply", "-f", str(cert_manager_certs)], capture_output=True, text=True, check=False)  # nosec B603, B607
         if result.stdout and verbose:
-            console.print(result.stdout)
+            get_console().print(result.stdout)
         if result.returncode != 0:
             raise RuntimeError(f"kubectl apply failed: {result.stderr}")
     elif cert_secrets.exists():
         result = subprocess.run(["kubectl", "apply", "-f", str(cert_secrets)], capture_output=True, text=True, check=False)  # nosec B603, B607
         if result.stdout and verbose:
-            console.print(result.stdout)
+            get_console().print(result.stdout)
         if result.returncode != 0:
             raise RuntimeError(f"kubectl apply failed: {result.stderr}")
 
@@ -1141,7 +1139,7 @@ def deploy_kubernetes(manifests_dir: Path, verbose: bool = False) -> None:
     if plugins_configmap.exists():
         result = subprocess.run(["kubectl", "apply", "-f", str(plugins_configmap)], capture_output=True, text=True, check=False)  # nosec B603, B607
         if result.stdout and verbose:
-            console.print(result.stdout)
+            get_console().print(result.stdout)
         if result.returncode != 0:
             raise RuntimeError(f"kubectl apply failed: {result.stderr}")
 
@@ -1150,7 +1148,7 @@ def deploy_kubernetes(manifests_dir: Path, verbose: bool = False) -> None:
         if infra_file.exists():
             result = subprocess.run(["kubectl", "apply", "-f", str(infra_file)], capture_output=True, text=True, check=False)  # nosec B603, B607
             if result.stdout and verbose:
-                console.print(result.stdout)
+                get_console().print(result.stdout)
             if result.returncode != 0:
                 raise RuntimeError(f"kubectl apply failed: {result.stderr}")
 
@@ -1159,13 +1157,13 @@ def deploy_kubernetes(manifests_dir: Path, verbose: bool = False) -> None:
     if gateway_route.exists():
         result = subprocess.run(["kubectl", "apply", "-f", str(gateway_route)], capture_output=True, text=True, check=False)  # nosec B603, B607
         if result.stdout and verbose:
-            console.print(result.stdout)
+            get_console().print(result.stdout)
         if result.returncode != 0:
             # Don't fail on Route errors (may not be on OpenShift)
             if verbose:
-                console.print(f"[yellow]Warning: Could not apply Route (may not be on OpenShift): {result.stderr}[/yellow]")
+                get_console().print(f"[yellow]Warning: Could not apply Route (may not be on OpenShift): {result.stderr}[/yellow]")
 
-    console.print("[green]✓ Deployed to Kubernetes[/green]")
+    get_console().print("[green]✓ Deployed to Kubernetes[/green]")
 
 
 def verify_kubernetes(namespace: str, wait: bool = False, timeout: int = 300, verbose: bool = False) -> str:
@@ -1212,7 +1210,7 @@ def verify_kubernetes(namespace: str, wait: bool = False, timeout: int = 300, ve
     if wait:
         result = subprocess.run(["kubectl", "wait", "--for=condition=Ready", "pod", "--all", "-n", namespace, f"--timeout={timeout}s"], capture_output=True, text=True, check=False)  # nosec B603, B607
         if result.stdout and verbose:
-            console.print(result.stdout)
+            get_console().print(result.stdout)
         if result.returncode != 0:
             raise RuntimeError(f"kubectl wait failed: {result.stderr}")
 
@@ -1250,8 +1248,8 @@ def destroy_kubernetes(manifests_dir: Path, verbose: bool = False) -> None:
         raise RuntimeError("kubectl not found. Cannot destroy Kubernetes deployment.")
 
     if not manifests_dir.exists():
-        console.print(f"[yellow]Manifests directory not found: {manifests_dir}[/yellow]")
-        console.print("[yellow]Nothing to destroy[/yellow]")
+        get_console().print(f"[yellow]Manifests directory not found: {manifests_dir}[/yellow]")
+        get_console().print("[yellow]Nothing to destroy[/yellow]")
         return
 
     # Delete all manifests except plugins-config.yaml
@@ -1261,8 +1259,8 @@ def destroy_kubernetes(manifests_dir: Path, verbose: bool = False) -> None:
     for manifest in all_manifests:
         result = subprocess.run(["kubectl", "delete", "-f", str(manifest), "--ignore-not-found=true"], capture_output=True, text=True, check=False)  # nosec B603, B607
         if result.stdout and verbose:
-            console.print(result.stdout)
+            get_console().print(result.stdout)
         if result.returncode != 0 and "NotFound" not in result.stderr:
-            console.print(f"[yellow]Warning: {result.stderr}[/yellow]")
+            get_console().print(f"[yellow]Warning: {result.stderr}[/yellow]")
 
-    console.print("[green]✓ Destroyed Kubernetes deployment[/green]")
+    get_console().print("[green]✓ Destroyed Kubernetes deployment[/green]")

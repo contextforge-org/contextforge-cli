@@ -33,14 +33,11 @@ from typing import Optional
 
 # Third-Party
 from pydantic import ValidationError
-from rich.console import Console
 import yaml
 
 # First-Party
 from cforge.commands.deploy.builder.schema import MCPStackConfig
-
-# Shared console instance for consistent output formatting
-console = Console()
+from cforge.common import get_console
 
 
 class CICDModule(ABC):
@@ -107,7 +104,6 @@ class CICDModule(ABC):
             True
         """
         self.verbose = verbose
-        self.console = console
 
     def validate(self, config_file: str) -> None:
         """Validate mcp-stack.yaml configuration using Pydantic schemas.
@@ -181,7 +177,7 @@ class CICDModule(ABC):
             >>> os.unlink(bad_path)
         """
         if self.verbose:
-            self.console.print(f"[blue]Validating {config_file}...[/blue]")
+            get_console().print(f"[blue]Validating {config_file}...[/blue]")
 
         # Load YAML configuration
         with open(config_file, "r") as f:
@@ -202,7 +198,7 @@ class CICDModule(ABC):
             raise ValueError(error_msg) from e
 
         if self.verbose:
-            self.console.print("[green]✓ Configuration valid[/green]")
+            get_console().print("[green]✓ Configuration valid[/green]")
 
     @abstractmethod
     async def build(self, config_file: str, plugins_only: bool = False, specific_plugins: Optional[list[str]] = None, no_cache: bool = False, copy_env_templates: bool = False) -> None:

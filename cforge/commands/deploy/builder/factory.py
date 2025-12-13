@@ -22,11 +22,9 @@ Example:
 # Standard
 from enum import Enum
 
-# Third-Party
-from rich.console import Console
-
 # First-Party
 from cforge.commands.deploy.builder.pipeline import CICDModule
+from cforge.common import get_console
 
 
 class CICDTypes(str, Enum):
@@ -65,9 +63,6 @@ class CICDTypes(str, Enum):
 
     DAGGER = "dagger"
     PYTHON = "python"
-
-
-console = Console()
 
 
 class DeployFactory:
@@ -117,13 +112,13 @@ class DeployFactory:
                     raise ImportError("Dagger SDK not installed")
 
                 if verbose:
-                    console.print("[green]✓ Dagger module loaded[/green]")
+                    get_console().print("[green]✓ Dagger module loaded[/green]")
 
                 return (MCPStackDagger(verbose), CICDTypes.DAGGER)
 
             except ImportError:
                 # Dagger dependencies not available, fall back to Python
-                console.print("[yellow]⚠ Dagger not installed. Using plain python.[/yellow]")
+                get_console().print("[yellow]⚠ Dagger not installed. Using plain python.[/yellow]")
 
         # Load plain Python implementation (fallback or explicitly requested)
         try:
@@ -131,16 +126,16 @@ class DeployFactory:
             from cforge.commands.deploy.builder.python_deploy import MCPStackPython
 
             if verbose and deployer != "dagger":
-                console.print("[blue]Using plain Python implementation[/blue]")
+                get_console().print("[blue]Using plain Python implementation[/blue]")
 
             return (MCPStackPython(verbose), CICDTypes.PYTHON)
 
         except ImportError as e:
             # Critical failure - neither implementation can be loaded
-            console.print("[red]✗ ERROR: Cannot import deployment modules[/red]")
-            console.print(f"[red]  Details: {e}[/red]")
-            console.print("[yellow]  Make sure you're running from the project root[/yellow]")
-            console.print("[yellow]  and PYTHONPATH is set correctly[/yellow]")
+            get_console().print("[red]✗ ERROR: Cannot import deployment modules[/red]")
+            get_console().print(f"[red]  Details: {e}[/red]")
+            get_console().print("[yellow]  Make sure you're running from the project root[/yellow]")
+            get_console().print("[yellow]  and PYTHONPATH is set correctly[/yellow]")
 
         # This should never be reached if PYTHONPATH is set correctly
         raise RuntimeError(f"Unable to load deployer of type '{deployer}'. ")
