@@ -59,6 +59,9 @@ class CLISettings(Settings):
 
     mcpgateway_bearer_token: Optional[str] = None
 
+    # Max number of lines for printed tables (<1 => infinite)
+    table_max_lines: int = 4
+
 
 @lru_cache
 def get_settings() -> CLISettings:

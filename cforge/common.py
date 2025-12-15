@@ -278,12 +278,15 @@ def print_table(
     console = get_console()
     table = Table(title=title, show_header=True, header_style="bold magenta")
     col_name_map = col_name_map or {}
+    max_lines = get_settings().table_max_lines
 
     for column in columns:
         table.add_column(col_name_map.get(column, column), style="cyan")
 
     for item in data:
-        row = [LineLimit(str(item.get(col, "")), max_lines=4) for col in columns]
+        row = [str(item.get(col, "")) for col in columns]
+        if max_lines > 0:
+            row = [LineLimit(cell, max_lines=max_lines) for cell in row]
         table.add_row(*row)
 
     console.print(table)
