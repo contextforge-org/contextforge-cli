@@ -48,6 +48,32 @@ class TestServeCommand:
             _, kwargs = mock_run.call_args
             assert kwargs.get("reload") is True
 
+    def test_serve_with_no_auth_sets_auth_required_false(self) -> None:
+        """Test serve command with --no-auth sets auth_required to False."""
+        with patch("cforge.commands.server.serve.uvicorn.run") as mock_run, patch("cforge.commands.server.serve.set_serve_settings") as mock_set_settings:
+            serve(no_auth=True, headless=False)
+            mock_run.assert_called_once()
+            # When headless=False (default), UI and admin API are enabled (not headless = True)
+            # When no_auth=True, auth_required should be False (not no_auth = False)
+            mock_set_settings.assert_called_once_with(
+                mcpgateway_ui_enabled=True,
+                mcpgateway_admin_api_enabled=True,
+                auth_required=False,
+            )
+
+    def test_serve_without_no_auth_sets_auth_required_true(self) -> None:
+        """Test serve command without --no-auth sets auth_required to True."""
+        with patch("cforge.commands.server.serve.uvicorn.run") as mock_run, patch("cforge.commands.server.serve.set_serve_settings") as mock_set_settings:
+            serve(no_auth=False, headless=False)
+            mock_run.assert_called_once()
+            # When headless=False (default), UI and admin API are enabled (not headless = True)
+            # When no_auth=False (default), auth_required should be True (not no_auth = True)
+            mock_set_settings.assert_called_once_with(
+                mcpgateway_ui_enabled=True,
+                mcpgateway_admin_api_enabled=True,
+                auth_required=True,
+            )
+
 
 class TestServeCommandIntegration:
     """Integration tests for the serve command"""
