@@ -501,6 +501,61 @@ class TestPrettyPrinting:
                     # Verify max_lines is set to 4
                     assert arg.max_lines == 4
 
+    def test_print_table_with_custom_max_lines(self, mock_settings) -> None:
+        """Test that print_table respects custom table_max_lines configuration."""
+        from unittest.mock import patch
+
+        # Configure mock_settings with custom max_lines value
+        mock_settings.table_max_lines = 2
+
+        test_data = [
+            {"id": 1, "name": "Item 1", "description": "Short text"},
+            {"id": 2, "name": "Item 2", "description": "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"},
+        ]
+        columns = ["id", "name", "description"]
+
+        # Mock Table.add_row to capture what's passed to it
+        with patch.object(Table, "add_row") as mock_add_row:
+            print_table(test_data, "Test Table", columns)
+
+            # Verify add_row was called for each data row
+            assert mock_add_row.call_count == 2
+
+            # Check that all arguments to add_row are LineLimit instances with custom max_lines
+            for call in mock_add_row.call_args_list:
+                args = call[0]  # Get positional arguments
+                for arg in args:
+                    assert isinstance(arg, LineLimit), f"Expected LineLimit but got {type(arg)}"
+                    # Verify max_lines is set to custom value of 2
+                    assert arg.max_lines == 2
+
+    def test_print_table_with_disabled_line_limit(self, mock_settings) -> None:
+        """Test that print_table skips LineLimit wrapping when table_max_lines is 0 or negative."""
+        from unittest.mock import patch
+
+        # Configure mock_settings with disabled max_lines value (0)
+        mock_settings.table_max_lines = 0
+
+        test_data = [
+            {"id": 1, "name": "Item 1", "description": "Short text"},
+            {"id": 2, "name": "Item 2", "description": "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"},
+        ]
+        columns = ["id", "name", "description"]
+
+        # Mock Table.add_row to capture what's passed to it
+        with patch.object(Table, "add_row") as mock_add_row:
+            print_table(test_data, "Test Table", columns)
+
+            # Verify add_row was called for each data row
+            assert mock_add_row.call_count == 2
+
+            # Check that arguments to add_row are plain strings, NOT LineLimit instances
+            for call in mock_add_row.call_args_list:
+                args = call[0]  # Get positional arguments
+                for arg in args:
+                    assert isinstance(arg, str), f"Expected str but got {type(arg)}"
+                    assert not isinstance(arg, LineLimit), "Should not wrap with LineLimit when disabled"
+
 
 class TestPromptForSchema:
     """Tests for prompt_for_schema function."""
