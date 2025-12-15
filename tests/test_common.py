@@ -27,6 +27,7 @@ from cforge.common import (
     _INT_SENTINEL_DEFAULT,
     AuthenticationError,
     CLIError,
+    LineLimit,
     get_app,
     get_auth_token,
     get_console,
@@ -132,6 +133,195 @@ class TestErrors:
         error = AuthenticationError("Auth failed")
         assert str(error) == "Auth failed"
         assert isinstance(error, CLIError)
+
+
+class TestLineLimit:
+    """Tests for LineLimit class that truncates rendered content."""
+
+    def test_line_limit_basic_truncation(self) -> None:
+        """Test that LineLimit truncates content to max_lines."""
+        from rich.text import Text
+        from rich.console import Console
+
+        console = Console()
+        # Create text with 5 lines
+        text = Text("Line 1\nLine 2\nLine 3\nLine 4\nLine 5")
+        limited = LineLimit(text, max_lines=3)
+
+        # Render to string and verify truncation
+        with console.capture() as capture:
+            console.print(limited)
+
+        output = capture.get()
+        # Should contain first 3 lines
+        assert "Line 1" in output
+        assert "Line 2" in output
+        assert "Line 3" in output
+        # Should NOT contain lines 4 and 5
+        assert "Line 4" not in output
+        assert "Line 5" not in output
+        # Should have ellipsis
+        assert "..." in output
+
+    def test_line_limit_no_truncation_needed(self) -> None:
+        """Test that LineLimit doesn't truncate when content is within limit."""
+        from rich.text import Text
+        from rich.console import Console
+
+        console = Console()
+        # Create text with 2 lines, limit to 5
+        text = Text("Line 1\nLine 2")
+        limited = LineLimit(text, max_lines=5)
+
+        with console.capture() as capture:
+            console.print(limited)
+
+        output = capture.get()
+        # Should contain both lines
+        assert "Line 1" in output
+        assert "Line 2" in output
+        # Should NOT have ellipsis since no truncation
+        assert "..." not in output
+
+    def test_line_limit_exact_match(self) -> None:
+        """Test LineLimit when content exactly matches max_lines."""
+        from rich.text import Text
+        from rich.console import Console
+
+        console = Console()
+        # Create text with exactly 3 lines
+        text = Text("Line 1\nLine 2\nLine 3")
+        limited = LineLimit(text, max_lines=3)
+
+        with console.capture() as capture:
+            console.print(limited)
+
+        output = capture.get()
+        # Should contain all 3 lines
+        assert "Line 1" in output
+        assert "Line 2" in output
+        assert "Line 3" in output
+        # Should NOT have ellipsis since content fits exactly
+        assert "..." not in output
+
+    def test_line_limit_zero_lines(self) -> None:
+        """Test LineLimit with max_lines=0 shows only ellipsis."""
+        from rich.text import Text
+        from rich.console import Console
+
+        console = Console()
+        text = Text("Line 1\nLine 2")
+        limited = LineLimit(text, max_lines=0)
+
+        with console.capture() as capture:
+            console.print(limited)
+
+        output = capture.get()
+        # Should only show ellipsis, no content
+        assert "..." in output
+        assert "Line 1" not in output
+        assert "Line 2" not in output
+
+    def test_line_limit_one_line(self) -> None:
+        """Test LineLimit with max_lines=1."""
+        from rich.text import Text
+        from rich.console import Console
+
+        console = Console()
+        text = Text("Line 1\nLine 2\nLine 3")
+        limited = LineLimit(text, max_lines=1)
+
+        with console.capture() as capture:
+            console.print(limited)
+
+        output = capture.get()
+        # Should show only first line and ellipsis
+        assert "Line 1" in output
+        assert "..." in output
+        assert "Line 2" not in output
+        assert "Line 3" not in output
+
+    def test_line_limit_with_long_single_line(self) -> None:
+        """Test LineLimit with a single long line that wraps."""
+        from rich.text import Text
+        from rich.console import Console
+
+        console = Console(width=80)  # Set fixed width for predictable wrapping
+        # Create a very long line that will wrap
+        long_text = "A" * 200
+        text = Text(long_text)
+        limited = LineLimit(text, max_lines=2)
+
+        with console.capture() as capture:
+            console.print(limited)
+
+        output = capture.get()
+        # Should contain some A's but be truncated
+        assert "A" in output
+        # Should have ellipsis since it wraps to more than 2 lines
+        assert "..." in output
+
+    def test_line_limit_measurement_passthrough(self) -> None:
+        """Test that LineLimit passes through measurement to wrapped renderable."""
+        from rich.text import Text
+        from rich.console import Console
+
+        console = Console()
+        text = Text("Test content")
+        limited = LineLimit(text, max_lines=3)
+
+        # Get measurement using console's options
+        measurement = console.measure(limited)
+
+        # Should return a valid Measurement
+        assert measurement is not None
+        assert hasattr(measurement, "minimum")
+        assert hasattr(measurement, "maximum")
+
+    def test_line_limit_with_empty_content(self) -> None:
+        """Test LineLimit with empty content."""
+        from rich.text import Text
+        from rich.console import Console
+
+        console = Console()
+        text = Text("")
+        limited = LineLimit(text, max_lines=3)
+
+        with console.capture() as capture:
+            console.print(limited)
+
+        output = capture.get()
+        # Empty content should produce minimal output
+        # Should not have ellipsis since there's nothing to truncate
+        assert "..." not in output
+
+    def test_line_limit_preserves_styling(self) -> None:
+        """Test that LineLimit preserves rich styling in truncated content."""
+        from rich.text import Text
+        from rich.console import Console
+
+        console = Console()
+        # Create styled text
+        text = Text()
+        text.append("Line 1\n", style="bold red")
+        text.append("Line 2\n", style="italic blue")
+        text.append("Line 3\n", style="underline green")
+        text.append("Line 4", style="bold yellow")
+
+        limited = LineLimit(text, max_lines=2)
+
+        with console.capture() as capture:
+            console.print(limited)
+
+        output = capture.get()
+        # Should contain first 2 lines
+        assert "Line 1" in output
+        assert "Line 2" in output
+        # Should NOT contain lines 3 and 4
+        assert "Line 3" not in output
+        assert "Line 4" not in output
+        # Should have ellipsis
+        assert "..." in output
 
 
 class TestMakeAuthenticatedRequest:
@@ -284,6 +474,32 @@ class TestPrettyPrinting:
         # Should not raise an error
         print_table(test_data, "Test Table", columns)
         mock_console.print.assert_called_once()
+
+    def test_print_table_wraps_all_cells_with_line_limit(self) -> None:
+        """Test that print_table wraps all cell values with LineLimit for truncation."""
+        from unittest.mock import patch
+
+        # Create test data with various types
+        test_data = [
+            {"id": 1, "name": "Item 1", "description": "Short text"},
+            {"id": 2, "name": "Item 2", "description": "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"},
+        ]
+        columns = ["id", "name", "description"]
+
+        # Mock Table.add_row to capture what's passed to it
+        with patch.object(Table, "add_row") as mock_add_row:
+            print_table(test_data, "Test Table", columns)
+
+            # Verify add_row was called for each data row
+            assert mock_add_row.call_count == 2
+
+            # Check that all arguments to add_row are LineLimit instances
+            for call in mock_add_row.call_args_list:
+                args = call[0]  # Get positional arguments
+                for arg in args:
+                    assert isinstance(arg, LineLimit), f"Expected LineLimit but got {type(arg)}"
+                    # Verify max_lines is set to 4
+                    assert arg.max_lines == 4
 
 
 class TestPromptForSchema:
