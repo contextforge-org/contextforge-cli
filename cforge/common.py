@@ -16,7 +16,9 @@ import json
 # Third-Party
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
-from rich.console import Console
+from rich.console import Console, ConsoleOptions, RenderResult, RenderableType
+from rich.segment import Segment
+from rich.measure import Measurement
 from rich.table import Table
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -212,6 +214,37 @@ def make_authenticated_request(
 # ------------------------------------------------------------------------------
 
 
+class LineLimit:
+    """A renderable that limits the number of lines after rich's wrapping."""
+
+    def __init__(self, renderable: RenderableType, max_lines: int):
+        """Implement with the wrapped renderable and the max lines to render"""
+        self.renderable = renderable
+        self.max_lines = max_lines
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        """Hook the actual rendering to perform the per-line truncation"""
+
+        # Let rich render the content with proper wrapping
+        lines = console.render_lines(self.renderable, options, pad=False)
+
+        # Limit to max_lines
+        for i, line in enumerate(lines):
+            if i >= self.max_lines:
+                # Optionally add an ellipsis indicator
+                yield Segment("...")
+                break
+            yield from line
+            yield Segment.line()
+
+    def __rich_measure__(self, console: Console, options: ConsoleOptions) -> Measurement:
+        """Hook the measurement of this entry to pass through to the wrapped
+        renderable
+        """
+
+        return Measurement.get(console, options, self.renderable)
+
+
 def print_json(data: Any, title: Optional[str] = None) -> None:
     """Pretty print JSON data with Rich.
 
@@ -250,7 +283,7 @@ def print_table(
         table.add_column(col_name_map.get(column, column), style="cyan")
 
     for item in data:
-        row = [str(item.get(col, "")) for col in columns]
+        row = [LineLimit(str(item.get(col, "")), max_lines=4) for col in columns]
         table.add_row(*row)
 
     console.print(table)
