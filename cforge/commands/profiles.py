@@ -53,7 +53,7 @@ def list_profiles() -> None:
         for profile in profiles:
             profile_data.append(
                 {
-                    "id": profile.id[:8] + "...",  # Truncate ID for display
+                    "id": profile.id,
                     "name": profile.name,
                     "email": profile.email,
                     "api_url": profile.api_url,
@@ -65,14 +65,7 @@ def list_profiles() -> None:
         print_table(
             profile_data,
             "Available Profiles",
-            ["name", "email", "api_url", "environment", "active"],
-            col_name_map={
-                "name": "Name",
-                "email": "Email",
-                "api_url": "API URL",
-                "environment": "Environment",
-                "active": "Active",
-            },
+            ["id", "name", "email", "api_url", "environment", "active"],
         )
 
         # Show which profile is currently active
