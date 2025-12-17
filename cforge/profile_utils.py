@@ -84,7 +84,7 @@ def load_profile_store() -> Optional[ProfileStore]:
     Returns:
         ProfileStore if found and valid, None otherwise
     """
-    if store_path := get_profile_store_path():
+    if (store_path := get_profile_store_path()) and store_path.exists():
         try:
             with open(store_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
