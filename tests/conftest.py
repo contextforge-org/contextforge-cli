@@ -311,3 +311,8 @@ def registered_mcp_server(mock_mcp_server, authorized_mock_client) -> Generator[
     """Test-level fixture to register the mock server and unregister at the end"""
     with register_mcp_server(mock_mcp_server, authorized_mock_client) as mcp_server:
         yield mcp_server
+
+
+@pytest.fixture
+def mock_base_url(mock_settings):
+    yield f"http://{mock_settings.host}:{mock_settings.port}"
