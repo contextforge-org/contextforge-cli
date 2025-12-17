@@ -1,0 +1,502 @@
+# -*- coding: utf-8 -*-
+"""Location: ./tests/test_profile_utils.py
+Copyright 2025
+SPDX-License-Identifier: Apache-2.0
+Authors: Gabe Goodhart
+
+Tests for profile management utilities.
+"""
+
+# Standard
+import json
+from datetime import datetime
+from pathlib import Path
+
+# First-Party
+from cforge.profile_utils import (
+    AuthProfile,
+    ProfileMetadata,
+    ProfileStore,
+    get_all_profiles,
+    get_active_profile,
+    get_profile,
+    get_profile_store_path,
+    load_profile_store,
+    save_profile_store,
+    set_active_profile,
+)
+
+
+class TestProfileModels:
+    """Tests for Pydantic profile models."""
+
+    def test_profile_metadata_creation(self) -> None:
+        """Test creating ProfileMetadata with various fields."""
+        metadata = ProfileMetadata(
+            description="Test profile",
+            environment="production",
+            color="#FF0000",
+            icon="🚀",
+            isInternal=True,
+        )
+
+        assert metadata.description == "Test profile"
+        assert metadata.environment == "production"
+        assert metadata.color == "#FF0000"
+        assert metadata.icon == "🚀"
+        assert metadata.is_internal is True
+
+    def test_profile_metadata_optional_fields(self) -> None:
+        """Test ProfileMetadata with optional fields omitted."""
+        metadata = ProfileMetadata()
+
+        assert metadata.description is None
+        assert metadata.environment is None
+        assert metadata.color is None
+        assert metadata.icon is None
+        assert metadata.is_internal is None
+
+    def test_auth_profile_creation(self) -> None:
+        """Test creating AuthProfile with required fields."""
+        now = datetime.now()
+        profile = AuthProfile(
+            id="profile-123",
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=now,
+            lastUsed=now,
+        )
+
+        assert profile.id == "profile-123"
+        assert profile.name == "Test Profile"
+        assert profile.email == "test@example.com"
+        assert profile.api_url == "https://api.example.com"
+        assert profile.is_active is True
+        assert profile.created_at == now
+        assert profile.last_used == now
+
+    def test_auth_profile_with_metadata(self) -> None:
+        """Test AuthProfile with metadata."""
+        metadata = ProfileMetadata(environment="staging")
+        profile = AuthProfile(
+            id="profile-123",
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://api.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+            metadata=metadata,
+        )
+
+        assert profile.metadata is not None
+        assert profile.metadata.environment == "staging"
+
+    def test_profile_store_creation(self) -> None:
+        """Test creating ProfileStore."""
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        profile2 = AuthProfile(
+            id="profile-2",
+            name="Profile 2",
+            email="user2@example.com",
+            apiUrl="https://api2.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile1, "profile-2": profile2},
+            activeProfileId="profile-1",
+        )
+
+        assert len(store.profiles) == 2
+        assert store.active_profile_id == "profile-1"
+        assert "profile-1" in store.profiles
+        assert "profile-2" in store.profiles
+
+    def test_profile_store_empty(self) -> None:
+        """Test creating empty ProfileStore."""
+        store = ProfileStore()
+
+        assert len(store.profiles) == 0
+        assert store.active_profile_id is None
+
+
+class TestProfileStorePath:
+    """Tests for profile store path functions."""
+
+    def test_get_profile_store_path(self, mock_settings) -> None:
+        """Test getting the profile store path."""
+        path = get_profile_store_path()
+
+        assert isinstance(path, Path)
+        assert path.name == "context-forge-profiles.json"
+        assert mock_settings.contextforge_home == path.parent
+
+
+class TestLoadProfileStore:
+    """Tests for loading profile store."""
+
+    def test_load_profile_store_success(self, mock_settings) -> None:
+        """Test successfully loading a profile store."""
+        # Create a test profile store file
+        store_path = get_profile_store_path()
+        store_path.parent.mkdir(exist_ok=True)
+
+        test_data = {
+            "profiles": {
+                "profile-1": {
+                    "id": "profile-1",
+                    "name": "Test Profile",
+                    "email": "test@example.com",
+                    "apiUrl": "https://api.example.com",
+                    "isActive": True,
+                    "createdAt": "2025-01-01T00:00:00",
+                }
+            },
+            "activeProfileId": "profile-1",
+        }
+
+        with open(store_path, "w", encoding="utf-8") as f:
+            json.dump(test_data, f)
+
+        store = load_profile_store()
+
+        assert store is not None
+        assert len(store.profiles) == 1
+        assert store.active_profile_id == "profile-1"
+        assert "profile-1" in store.profiles
+
+    def test_load_profile_store_not_found(self, mock_settings) -> None:
+        """Test loading when profile store doesn't exist."""
+        store = load_profile_store()
+
+        assert store is None
+
+    def test_load_profile_store_invalid_json(self, mock_settings) -> None:
+        """Test loading with invalid JSON."""
+        store_path = get_profile_store_path()
+        store_path.parent.mkdir(exist_ok=True)
+
+        with open(store_path, "w", encoding="utf-8") as f:
+            f.write("invalid json {")
+
+        store = load_profile_store()
+
+        assert store is None
+
+    def test_load_profile_store_invalid_schema(self, mock_settings) -> None:
+        """Test loading with invalid schema."""
+        store_path = get_profile_store_path()
+        store_path.parent.mkdir(exist_ok=True)
+
+        # Missing required fields
+        test_data = {"profiles": {}}
+
+        with open(store_path, "w", encoding="utf-8") as f:
+            json.dump(test_data, f)
+
+        store = load_profile_store()
+
+        # Should still load with defaults
+        assert store is not None
+        assert len(store.profiles) == 0
+
+
+class TestSaveProfileStore:
+    """Tests for saving profile store."""
+
+    def test_save_profile_store_success(self, mock_settings) -> None:
+        """Test successfully saving a profile store."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+
+        save_profile_store(store)
+
+        # Verify file was created
+        store_path = get_profile_store_path()
+        assert store_path.exists()
+
+        # Verify content
+        with open(store_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        assert "profiles" in data
+        assert "profile-1" in data["profiles"]
+        assert data["activeProfileId"] == "profile-1"
+        assert data["profiles"]["profile-1"]["apiUrl"] == "https://api.example.com"
+
+    def test_save_profile_store_creates_directory(self, mock_settings) -> None:
+        """Test that save creates parent directory if needed."""
+        store = ProfileStore()
+        store_path = get_profile_store_path()
+
+        # Ensure directory doesn't exist
+        if store_path.parent.exists():
+            import shutil
+
+            shutil.rmtree(store_path.parent)
+
+        save_profile_store(store)
+
+        assert store_path.parent.exists()
+        assert store_path.exists()
+
+
+class TestGetAllProfiles:
+    """Tests for getting all profiles."""
+
+    def test_get_all_profiles_success(self, mock_settings) -> None:
+        """Test getting all profiles."""
+        # Create test profiles
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        profile2 = AuthProfile(
+            id="profile-2",
+            name="Profile 2",
+            email="user2@example.com",
+            apiUrl="https://api2.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile1, "profile-2": profile2},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        profiles = get_all_profiles()
+
+        assert len(profiles) == 2
+        assert any(p.id == "profile-1" for p in profiles)
+        assert any(p.id == "profile-2" for p in profiles)
+
+    def test_get_all_profiles_empty(self, mock_settings) -> None:
+        """Test getting profiles when none exist."""
+        profiles = get_all_profiles()
+
+        assert len(profiles) == 0
+
+
+class TestGetProfile:
+    """Tests for getting a specific profile."""
+
+    def test_get_profile_success(self, mock_settings) -> None:
+        """Test getting a specific profile by ID."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        result = get_profile("profile-1")
+
+        assert result is not None
+        assert result.id == "profile-1"
+        assert result.name == "Test Profile"
+
+    def test_get_profile_not_found(self, mock_settings) -> None:
+        """Test getting a profile that doesn't exist."""
+        result = get_profile("nonexistent")
+
+        assert result is None
+
+    def test_get_profile_no_store(self, mock_settings) -> None:
+        """Test getting a profile when store doesn't exist."""
+        result = get_profile("profile-1")
+
+        assert result is None
+
+
+class TestGetActiveProfile:
+    """Tests for getting the active profile."""
+
+    def test_get_active_profile_success(self, mock_settings) -> None:
+        """Test getting the active profile."""
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        profile2 = AuthProfile(
+            id="profile-2",
+            name="Profile 2",
+            email="user2@example.com",
+            apiUrl="https://api2.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile1, "profile-2": profile2},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        result = get_active_profile()
+
+        assert result is not None
+        assert result.id == "profile-1"
+        assert result.is_active is True
+
+    def test_get_active_profile_none_set(self, mock_settings) -> None:
+        """Test getting active profile when none is set."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId=None,
+        )
+        save_profile_store(store)
+
+        result = get_active_profile()
+
+        assert result is None
+
+    def test_get_active_profile_no_store(self, mock_settings) -> None:
+        """Test getting active profile when store doesn't exist."""
+        result = get_active_profile()
+
+        assert result is None
+
+
+class TestSetActiveProfile:
+    """Tests for setting the active profile."""
+
+    def test_set_active_profile_success(self, mock_settings) -> None:
+        """Test successfully setting the active profile."""
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        profile2 = AuthProfile(
+            id="profile-2",
+            name="Profile 2",
+            email="user2@example.com",
+            apiUrl="https://api2.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile1, "profile-2": profile2},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        # Switch to profile-2
+        result = set_active_profile("profile-2")
+
+        assert result is True
+
+        # Verify the change
+        updated_store = load_profile_store()
+        assert updated_store is not None
+        assert updated_store.active_profile_id == "profile-2"
+        assert updated_store.profiles["profile-2"].is_active is True
+        assert updated_store.profiles["profile-1"].is_active is False
+        assert updated_store.profiles["profile-2"].last_used is not None
+
+    def test_set_active_profile_not_found(self, mock_settings) -> None:
+        """Test setting active profile when profile doesn't exist."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        result = set_active_profile("nonexistent")
+
+        assert result is False
+
+    def test_set_active_profile_no_store(self, mock_settings) -> None:
+        """Test setting active profile when store doesn't exist."""
+        result = set_active_profile("profile-1")
+
+        assert result is False
+
+    def test_set_active_profile_updates_last_used(self, mock_settings) -> None:
+        """Test that setting active profile updates last_used timestamp."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+            lastUsed=None,
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId=None,
+        )
+        save_profile_store(store)
+
+        # Set as active
+        result = set_active_profile("profile-1")
+
+        assert result is True
+
+        # Verify last_used was updated
+        updated_store = load_profile_store()
+        assert updated_store is not None
+        assert updated_store.profiles["profile-1"].last_used is not None

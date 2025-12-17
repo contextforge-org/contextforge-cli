@@ -91,6 +91,43 @@ class TestTokenManagement:
         assert token is None
 
 
+class TestBaseUrl:
+    """Tests for get_base_url function."""
+
+    def test_get_base_url_with_active_profile(self, mock_settings) -> None:
+        """Test get_base_url returns profile's API URL when active profile exists."""
+        from cforge.common import get_base_url
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
+        from datetime import datetime
+
+        # Create and save a profile
+        profile = AuthProfile(
+            id="profile-1",
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://custom-api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        # Get base URL should return the profile's API URL
+        base_url = get_base_url()
+        assert base_url == "https://custom-api.example.com"
+
+    def test_get_base_url_without_active_profile(self, mock_settings) -> None:
+        """Test get_base_url returns default URL when no active profile."""
+        from cforge.common import get_base_url
+
+        # No profile saved, should use settings
+        base_url = get_base_url()
+        assert base_url == f"http://{mock_settings.host}:{mock_settings.port}"
+
+
 class TestAuthentication:
     """Tests for authentication functions."""
 
