@@ -27,6 +27,7 @@ import typer
 
 # First-Party
 from cforge.config import get_settings
+from cforge.profile_utils import get_active_profile
 
 # ------------------------------------------------------------------------------
 # Singletons
@@ -94,6 +95,19 @@ def handle_exception(exception: Exception) -> None:
 # ------------------------------------------------------------------------------
 # Auth
 # ------------------------------------------------------------------------------
+
+
+def get_base_url() -> str:
+    """Get the full base URL for the current profile's server
+
+    TODO: This will need to support https in the future!
+
+    Returns:
+        The string URL base
+    """
+    if profile := get_active_profile():
+        return profile.api_url
+    return f"http://{get_settings().host}:{get_settings().port}"
 
 
 def get_token_file() -> Path:
@@ -190,7 +204,7 @@ def make_authenticated_request(
         else:
             headers["Authorization"] = f"Bearer {token}"
 
-    gateway_url = f"http://{get_settings().host}:{get_settings().port}"
+    gateway_url = get_base_url()
     full_url = f"{gateway_url}{url}"
 
     try:

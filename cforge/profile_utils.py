@@ -11,12 +11,14 @@ Reads profile data from the Desktop app's electron-store files.
 # Standard
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-from urllib.parse import urlparse
+from typing import Dict, List, Optional
 import json
 
 # Third-Party
 from pydantic import BaseModel, Field
+
+# Local
+from cforge.config import get_settings
 
 
 class ProfileMetadata(BaseModel):
@@ -31,6 +33,7 @@ class ProfileMetadata(BaseModel):
     class Config:
         """Pydantic model config"""
 
+        # Map naming conventions
         populate_by_name = True
 
 
@@ -49,6 +52,7 @@ class AuthProfile(BaseModel):
     class Config:
         """Pydantic model config"""
 
+        # Map naming conventions
         populate_by_name = True
 
 
@@ -61,18 +65,8 @@ class ProfileStore(BaseModel):
     class Config:
         """Pydantic model config"""
 
+        # Map naming conventions
         populate_by_name = True
-
-
-def get_contextforge_home() -> Path:
-    """Get the Context Forge home directory.
-
-    Returns:
-        Path to the Context Forge home directory
-    """
-    from cforge.config import get_settings
-
-    return get_settings().contextforge_home
 
 
 def get_profile_store_path() -> Path:
@@ -81,7 +75,7 @@ def get_profile_store_path() -> Path:
     Returns:
         Path to the profile store JSON file
     """
-    return get_contextforge_home() / "context-forge-profiles.json"
+    return get_settings().contextforge_home / "context-forge-profiles.json"
 
 
 def load_profile_store() -> Optional[ProfileStore]:
@@ -90,17 +84,14 @@ def load_profile_store() -> Optional[ProfileStore]:
     Returns:
         ProfileStore if found and valid, None otherwise
     """
-    store_path = get_profile_store_path()
-    if not store_path.exists():
-        return None
-
-    try:
-        with open(store_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return ProfileStore.model_validate(data)
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"Warning: Failed to load profile store: {e}")
-        return None
+    if store_path := get_profile_store_path():
+        try:
+            with open(store_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return ProfileStore.model_validate(data)
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"Warning: Failed to load profile store: {e}")
+            return None
 
 
 def save_profile_store(store: ProfileStore) -> None:
@@ -110,7 +101,7 @@ def save_profile_store(store: ProfileStore) -> None:
         store: ProfileStore to save
     """
     store_path = get_profile_store_path()
-    store_path.parent.mkdir(parents=True, exist_ok=True)
+    store_path.parent.mkdir(exist_ok=True)
 
     with open(store_path, "w", encoding="utf-8") as f:
         # Convert to dict with original field names (camelCase)
@@ -124,11 +115,9 @@ def get_all_profiles() -> List[AuthProfile]:
     Returns:
         List of all profiles, empty list if none found
     """
-    store = load_profile_store()
-    if not store:
-        return []
-
-    return list(store.profiles.values())
+    if store := load_profile_store():
+        return list(store.profiles.values())
+    return []
 
 
 def get_profile(profile_id: str) -> Optional[AuthProfile]:
@@ -140,11 +129,8 @@ def get_profile(profile_id: str) -> Optional[AuthProfile]:
     Returns:
         AuthProfile if found, None otherwise
     """
-    store = load_profile_store()
-    if not store:
-        return None
-
-    return store.profiles.get(profile_id)
+    if store := load_profile_store():
+        return store.profiles.get(profile_id)
 
 
 def get_active_profile() -> Optional[AuthProfile]:
@@ -153,11 +139,8 @@ def get_active_profile() -> Optional[AuthProfile]:
     Returns:
         AuthProfile if an active profile is set, None otherwise
     """
-    store = load_profile_store()
-    if not store or not store.active_profile_id:
-        return None
-
-    return store.profiles.get(store.active_profile_id)
+    if (store := load_profile_store()) and store.active_profile_id:
+        return store.profiles.get(store.active_profile_id)
 
 
 def set_active_profile(profile_id: str) -> bool:
@@ -187,31 +170,3 @@ def set_active_profile(profile_id: str) -> bool:
 
     save_profile_store(store)
     return True
-
-
-def parse_api_url(api_url: str) -> Tuple[str, int]:
-    """Parse an API URL into host and port.
-
-    Args:
-        api_url: API URL to parse (e.g., 'http://localhost:4444')
-
-    Returns:
-        Tuple of (host, port)
-    """
-    parsed = urlparse(api_url)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    return host, port
-
-
-def get_active_host_port() -> Tuple[str, int]:
-    """Get the host and port from the active profile.
-
-    Returns:
-        Tuple of (host, port), defaults to ('localhost', 4444) if no active profile
-    """
-    profile = get_active_profile()
-    if not profile:
-        return "localhost", 4444
-
-    return parse_api_url(profile.api_url)
