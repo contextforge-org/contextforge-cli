@@ -1,0 +1,505 @@
+# -*- coding: utf-8 -*-
+"""Location: ./tests/commands/settings/test_profiles.py
+Copyright 2025
+SPDX-License-Identifier: Apache-2.0
+Authors: Gabe Goodhart
+
+Tests for profile management CLI commands.
+"""
+
+# Standard
+from datetime import datetime
+from unittest.mock import Mock, patch
+
+# Third-Party
+import pytest
+import typer
+
+# First-Party
+from cforge.commands.settings.profiles import (
+    profiles_current,
+    profiles_get,
+    profiles_list,
+    profiles_switch,
+)
+from cforge.profile_utils import AuthProfile, ProfileMetadata, ProfileStore, save_profile_store
+
+
+class TestProfilesList:
+    """Tests for profiles list command."""
+
+    def test_profiles_list_success(self, mock_console, mock_settings) -> None:
+        """Test listing profiles successfully."""
+        # Create test profiles
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Production",
+            email="user@prod.com",
+            apiUrl="https://api.prod.com",
+            isActive=True,
+            createdAt=datetime.now(),
+            metadata=ProfileMetadata(environment="production"),
+        )
+        profile2 = AuthProfile(
+            id="profile-2",
+            name="Staging",
+            email="user@staging.com",
+            apiUrl="https://api.staging.com",
+            isActive=False,
+            createdAt=datetime.now(),
+            metadata=ProfileMetadata(environment="staging"),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile1, "profile-2": profile2},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.print_table") as mock_table:
+                profiles_list()
+
+        # Verify table was printed
+        mock_table.assert_called_once()
+        call_args = mock_table.call_args
+        profile_data = call_args[0][0]
+
+        # Verify profile data
+        assert len(profile_data) == 2
+        assert any(p["id"] == "profile-1" for p in profile_data)
+        assert any(p["id"] == "profile-2" for p in profile_data)
+        assert any(p["active"] == "✓" for p in profile_data)
+
+        # Verify active profile message
+        assert any("Currently using profile" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_profiles_list_empty(self, mock_console, mock_settings) -> None:
+        """Test listing when no profiles exist."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_list()
+
+        # Verify message about no profiles
+        assert any("No profiles found" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_profiles_list_with_active_profile(self, mock_console, mock_settings) -> None:
+        """Test listing profiles when there is an active profile."""
+        from datetime import datetime
+
+        # Create test profiles with one active
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Active Profile",
+            email="active@example.com",
+            apiUrl="https://api.active.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        profile2 = AuthProfile(
+            id="profile-2",
+            name="Inactive Profile",
+            email="inactive@example.com",
+            apiUrl="https://api.inactive.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile1, "profile-2": profile2},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.print_table"):
+                profiles_list()
+
+        # Verify active profile message is shown
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Currently using profile" in call for call in print_calls)
+        assert any("Active Profile" in call for call in print_calls)
+
+    def test_profiles_list_error(self, mock_console, mock_settings) -> None:
+        """Test listing profiles with an error."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.get_all_profiles", side_effect=Exception("Test error")):
+                with pytest.raises(typer.Exit) as exc_info:
+                    profiles_list()
+
+        assert exc_info.value.exit_code == 1
+        assert any("Error listing profiles" in str(call) for call in mock_console.print.call_args_list)
+
+
+class TestProfilesGet:
+    """Tests for profiles get command."""
+
+    def test_profiles_get_by_id(self, mock_console, mock_settings) -> None:
+        """Test getting a specific profile by ID."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+            lastUsed=datetime.now(),
+            metadata=ProfileMetadata(
+                description="Test description",
+                environment="production",
+                icon="🚀",
+            ),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_get(profile_id="profile-1", json_output=False)
+
+        # Verify profile details were printed
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Test Profile" in call for call in print_calls)
+        assert any("test@example.com" in call for call in print_calls)
+        assert any("https://api.example.com" in call for call in print_calls)
+
+    def test_profiles_get_active(self, mock_console, mock_settings) -> None:
+        """Test getting the active profile when no ID provided."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Active Profile",
+            email="active@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_get(profile_id=None, json_output=False)
+
+        # Verify active profile was shown
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Active Profile" in call for call in print_calls)
+
+    def test_profiles_get_not_found(self, mock_console, mock_settings) -> None:
+        """Test getting a profile that doesn't exist."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with pytest.raises(typer.Exit) as exc_info:
+                profiles_get(profile_id="nonexistent", json_output=False)
+
+        assert exc_info.value.exit_code == 1
+        assert any("Profile not found" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_profiles_get_no_active(self, mock_console, mock_settings) -> None:
+        """Test getting active profile when none is set."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with pytest.raises(typer.Exit) as exc_info:
+                profiles_get(profile_id=None, json_output=False)
+
+        assert exc_info.value.exit_code == 1
+        assert any("No active profile" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_profiles_get_json_output(self, mock_console, mock_settings) -> None:
+        """Test getting profile with JSON output."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.print_json") as mock_json:
+                profiles_get(profile_id="profile-1", json_output=True)
+
+        # Verify JSON output was called
+        mock_json.assert_called_once()
+
+    def test_profiles_get_with_metadata_fields(self, mock_console, mock_settings) -> None:
+        """Test getting profile with all metadata fields displayed."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+            lastUsed=datetime.now(),
+            metadata=ProfileMetadata(
+                description="Test description",
+                environment="production",
+                icon="🚀",
+            ),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_get(profile_id="profile-1", json_output=False)
+
+        # Verify all metadata fields are printed
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Description" in call and "Test description" in call for call in print_calls)
+        assert any("Environment" in call and "production" in call for call in print_calls)
+        assert any("Icon" in call and "🚀" in call for call in print_calls)
+        assert any("Last Used" in call for call in print_calls)
+
+    def test_profiles_get_error(self, mock_console, mock_settings) -> None:
+        """Test getting profile with an error."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.get_profile", side_effect=Exception("Test error")):
+                with pytest.raises(typer.Exit) as exc_info:
+                    profiles_get(profile_id="profile-1", json_output=False)
+
+        assert exc_info.value.exit_code == 1
+        assert any("Error retrieving profile" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_profiles_get_partial_metadata(self, mock_console, mock_settings) -> None:
+        """Test getting a profile with partial metadata still works."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Active Profile",
+            email="active@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+            metadata=ProfileMetadata(isInternal=True),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_get(profile_id=None, json_output=False)
+
+        # Verify active profile was shown
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Active Profile" in call for call in print_calls)
+        assert not any("Description:" in call for call in mock_console.print.call_args_list)
+        assert not any("Environment:" in call for call in mock_console.print.call_args_list)
+        assert not any("Icon:" in call for call in mock_console.print.call_args_list)
+
+
+class TestProfilesSwitch:
+    """Tests for profiles switch command."""
+
+    def test_profiles_switch_success(self, mock_console, mock_settings) -> None:
+        """Test successfully switching profiles."""
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        profile2 = AuthProfile(
+            id="profile-2",
+            name="Profile 2",
+            email="user2@example.com",
+            apiUrl="https://api2.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile1, "profile-2": profile2},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.get_settings") as mock_get_settings:
+                mock_get_settings.cache_clear = Mock()
+                profiles_switch(profile_id="profile-2")
+
+        # Verify success message
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Switched to profile" in call for call in print_calls)
+        assert any("Profile 2" in call for call in print_calls)
+
+        # Verify cache was cleared
+        mock_get_settings.cache_clear.assert_called_once()
+
+    def test_profiles_switch_not_found(self, mock_console, mock_settings) -> None:
+        """Test switching to a profile that doesn't exist."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with pytest.raises(typer.Exit) as exc_info:
+                profiles_switch(profile_id="nonexistent")
+
+        assert exc_info.value.exit_code == 1
+        assert any("Profile not found" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_profiles_switch_error(self, mock_console, mock_settings) -> None:
+        """Test switching profiles with an error."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.set_active_profile", side_effect=Exception("Test error")):
+                with pytest.raises(typer.Exit) as exc_info:
+                    profiles_switch(profile_id="profile-1")
+
+        assert exc_info.value.exit_code == 1
+        assert any("Error switching profile" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_profiles_switch_failed_to_switch(self, mock_console, mock_settings) -> None:
+        """Test switching profiles when set_active_profile returns False."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.set_active_profile", return_value=False):
+                with pytest.raises(typer.Exit) as exc_info:
+                    profiles_switch(profile_id="profile-1")
+
+        assert exc_info.value.exit_code == 1
+        assert any("Failed to switch to profile" in str(call) for call in mock_console.print.call_args_list)
+
+
+class TestProfilesCurrent:
+    """Tests for profiles current command."""
+
+    def test_profiles_current_success(self, mock_console, mock_settings) -> None:
+        """Test showing the current profile."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Current Profile",
+            email="current@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+            metadata=ProfileMetadata(environment="production"),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_current()
+
+        # Verify current profile was shown
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Current Profile" in call for call in print_calls)
+        assert any("current@example.com" in call for call in print_calls)
+        assert any("production" in call for call in print_calls)
+
+    def test_profiles_current_none_set(self, mock_console, mock_settings) -> None:
+        """Test showing current profile when none is set."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_current()
+
+        # Verify message about no active profile
+        assert any("No active profile" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_profiles_current_with_environment(self, mock_console, mock_settings) -> None:
+        """Test showing current profile with environment metadata."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Current Profile",
+            email="current@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+            metadata=ProfileMetadata(environment="staging"),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_current()
+
+        # Verify environment is shown
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Environment" in call and "staging" in call for call in print_calls)
+
+    def test_profiles_current_error(self, mock_console, mock_settings) -> None:
+        """Test showing current profile with an error."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.get_active_profile", side_effect=Exception("Test error")):
+                with pytest.raises(typer.Exit) as exc_info:
+                    profiles_current()
+
+        assert exc_info.value.exit_code == 1
+        assert any("Error retrieving current profile" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_profiles_current_no_environment(self, mock_console, mock_settings) -> None:
+        """Test showing the current profile works when environment is unset."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Current Profile",
+            email="current@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+            metadata=ProfileMetadata(isInternal=True),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_current()
+
+        # Verify current profile was shown
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Current Profile" in call for call in print_calls)
+        assert any("current@example.com" in call for call in print_calls)
+        assert not any("Environment:" in call for call in print_calls)
