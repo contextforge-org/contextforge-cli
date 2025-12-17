@@ -21,6 +21,9 @@ from pydantic import model_validator
 from mcpgateway.config import Settings
 from mcpgateway.config import get_settings as cf_get_settings
 
+# Local
+from cforge.profile_utils import get_active_host_port
+
 
 HOME_DIR_NAME = ".contextforge"
 DEFAULT_HOME = Path.home() / HOME_DIR_NAME
@@ -83,6 +86,15 @@ def get_settings() -> CLISettings:
         # libraries there use the override values
         cf_settings = cf_get_settings(client_mode=True)
         cf_settings.database_url = settings.database_url
+
+        # Override host and port from active profile if available
+        try:
+            host, port = get_active_host_port()
+            cf_settings.host = host
+            cf_settings.port = port
+        except Exception:
+            # If profile loading fails, use defaults from settings
+            pass
 
     return settings
 

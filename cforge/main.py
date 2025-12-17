@@ -40,6 +40,7 @@ from cforge.commands.settings.import_cmd import import_cmd
 from cforge.commands.settings.config_schema import config_schema
 from cforge.commands.settings.support_bundle import support_bundle
 from cforge.commands.settings.version import version
+from cforge.commands import profiles
 from cforge.commands.metrics.metrics import metrics_get, metrics_reset
 from cforge.commands.resources.tools import (
     tools_list,
@@ -112,11 +113,17 @@ app.command(rich_help_panel="Server")(serve)
 app.command(rich_help_panel="Settings")(login)
 app.command(rich_help_panel="Settings")(logout)
 app.command(rich_help_panel="Settings")(whoami)
-app.command(rich_help_panel="Settings")(export)
 app.command(name="import", rich_help_panel="Settings")(import_cmd)
+app.command(rich_help_panel="Settings")(export)
 app.command(rich_help_panel="Settings")(config_schema)
 app.command(rich_help_panel="Settings")(support_bundle)
 app.command(rich_help_panel="Settings")(version)
+
+# ---------------------------------------------------------------------------
+# Profiles command group
+# ---------------------------------------------------------------------------
+
+app.add_typer(profiles.app, name="profiles", rich_help_panel="Settings")
 
 # ---------------------------------------------------------------------------
 # Deploy command (hidden stub for future use)
