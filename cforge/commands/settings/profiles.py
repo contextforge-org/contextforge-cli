@@ -24,15 +24,7 @@ from cforge.profile_utils import (
 )
 
 
-app = typer.Typer(
-    name="profiles",
-    help="Manage user profiles for connecting to different Context Forge instances",
-    rich_markup_mode="rich",
-)
-
-
-@app.command("list")
-def list_profiles() -> None:
+def profiles_list() -> None:
     """List all available profiles.
 
     Displays all profiles configured in the Desktop app, showing their name,
@@ -79,8 +71,7 @@ def list_profiles() -> None:
         raise typer.Exit(1)
 
 
-@app.command("get")
-def get_profile_cmd(
+def profiles_get(
     profile_id: Optional[str] = typer.Argument(
         None,
         help="Profile ID to retrieve. If not provided, shows the active profile.",
@@ -139,8 +130,7 @@ def get_profile_cmd(
         raise typer.Exit(1)
 
 
-@app.command("switch")
-def switch_profile(
+def profiles_switch(
     profile_id: str = typer.Argument(
         ...,
         help="Profile ID to switch to. Use 'cforge profiles list' to see available profiles.",
@@ -184,8 +174,7 @@ def switch_profile(
         raise typer.Exit(1)
 
 
-@app.command("current")
-def current_profile() -> None:
+def profiles_current() -> None:
     """Show the currently active profile.
 
     Displays information about which profile is currently being used by the CLI.

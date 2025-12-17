@@ -32,6 +32,7 @@ import typer
 from cforge.common import get_app
 from cforge.commands.deploy.deploy import deploy
 from cforge.commands.server.serve import serve
+from cforge.commands.settings import profiles
 from cforge.commands.settings.login import login
 from cforge.commands.settings.logout import logout
 from cforge.commands.settings.whoami import whoami
@@ -40,7 +41,6 @@ from cforge.commands.settings.import_cmd import import_cmd
 from cforge.commands.settings.config_schema import config_schema
 from cforge.commands.settings.support_bundle import support_bundle
 from cforge.commands.settings.version import version
-from cforge.commands import profiles
 from cforge.commands.metrics.metrics import metrics_get, metrics_reset
 from cforge.commands.resources.tools import (
     tools_list,
@@ -123,7 +123,16 @@ app.command(rich_help_panel="Settings")(version)
 # Profiles command group
 # ---------------------------------------------------------------------------
 
-app.add_typer(profiles.app, name="profiles", rich_help_panel="Settings")
+profiles_app = typer.Typer(
+    name="profiles",
+    help="Manage user profiles for connecting to different Context Forge instances",
+    rich_markup_mode="rich",
+)
+app.add_typer(profiles_app, name="profiles", rich_help_panel="Settings")
+profiles_app.command("list")(profiles.profiles_list)
+profiles_app.command("get")(profiles.profiles_get)
+profiles_app.command("switch")(profiles.profiles_switch)
+profiles_app.command("current")(profiles.profiles_current)
 
 # ---------------------------------------------------------------------------
 # Deploy command (hidden stub for future use)
