@@ -294,6 +294,195 @@ class TestAuthentication:
         assert token is None
 
 
+class TestAutoLogin:
+    """Tests for automatic login functionality."""
+
+    def test_attempt_auto_login_no_profile(self, mock_settings):
+        """Test auto-login when no profile is active."""
+        from cforge.common import attempt_auto_login
+
+        token = attempt_auto_login()
+        assert token is None
+
+    def test_attempt_auto_login_no_credentials(self, mock_settings):
+        """Test auto-login when credentials are not available."""
+        from cforge.common import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
+        from datetime import datetime
+
+        mock_profile = AuthProfile(
+            id="test-profile",
+            name="Test",
+            email="test@example.com",
+            apiUrl="http://localhost:4444",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        with patch("cforge.common.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.load_profile_credentials", return_value=None):
+                token = attempt_auto_login()
+                assert token is None
+
+    def test_attempt_auto_login_missing_email(self, mock_settings):
+        """Test auto-login when email is missing from credentials."""
+        from cforge.common import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
+        from datetime import datetime
+
+        mock_profile = AuthProfile(
+            id="test-profile",
+            name="Test",
+            email="test@example.com",
+            apiUrl="http://localhost:4444",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        with patch("cforge.common.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.load_profile_credentials", return_value={"password": "test"}):
+                token = attempt_auto_login()
+                assert token is None
+
+    def test_attempt_auto_login_missing_password(self, mock_settings):
+        """Test auto-login when password is missing from credentials."""
+        from cforge.common import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
+        from datetime import datetime
+
+        mock_profile = AuthProfile(
+            id="test-profile",
+            name="Test",
+            email="test@example.com",
+            apiUrl="http://localhost:4444",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        with patch("cforge.common.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.load_profile_credentials", return_value={"email": "test@example.com"}):
+                token = attempt_auto_login()
+                assert token is None
+
+    @patch("cforge.common.requests.post")
+    def test_attempt_auto_login_success(self, mock_post, mock_settings):
+        """Test successful auto-login."""
+        from cforge.common import attempt_auto_login, load_token
+        from cforge.profile_utils import AuthProfile
+        from datetime import datetime
+
+        mock_profile = AuthProfile(
+            id="test-profile",
+            name="Test",
+            email="test@example.com",
+            apiUrl="http://localhost:4444",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        # Mock successful login response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"access_token": "auto-login-token"}
+        mock_post.return_value = mock_response
+
+        with patch("cforge.common.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.load_profile_credentials", return_value={"email": "test@example.com", "password": "test-pass"}):
+                token = attempt_auto_login()
+                assert token == "auto-login-token"
+
+                # Verify token was saved
+                saved_token = load_token()
+                assert saved_token == "auto-login-token"
+
+    @patch("cforge.common.requests.post")
+    def test_attempt_auto_login_failed_login(self, mock_post, mock_settings):
+        """Test auto-login when login fails."""
+        from cforge.common import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
+        from datetime import datetime
+
+        mock_profile = AuthProfile(
+            id="test-profile",
+            name="Test",
+            email="test@example.com",
+            apiUrl="http://localhost:4444",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        # Mock failed login response
+        mock_response = Mock()
+        mock_response.status_code = 401
+        mock_post.return_value = mock_response
+
+        with patch("cforge.common.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.load_profile_credentials", return_value={"email": "test@example.com", "password": "wrong-pass"}):
+                token = attempt_auto_login()
+                assert token is None
+
+    @patch("cforge.common.requests.post")
+    def test_attempt_auto_login_no_token_in_response(self, mock_post, mock_settings):
+        """Test auto-login when response doesn't contain token."""
+        from cforge.common import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
+        from datetime import datetime
+
+        mock_profile = AuthProfile(
+            id="test-profile",
+            name="Test",
+            email="test@example.com",
+            apiUrl="http://localhost:4444",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        # Mock response without token
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {}
+        mock_post.return_value = mock_response
+
+        with patch("cforge.common.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.load_profile_credentials", return_value={"email": "test@example.com", "password": "test-pass"}):
+                token = attempt_auto_login()
+                assert token is None
+
+    @patch("cforge.common.requests.post")
+    def test_attempt_auto_login_request_exception(self, mock_post, mock_settings):
+        """Test auto-login when request raises exception."""
+        from cforge.common import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
+        from datetime import datetime
+
+        mock_profile = AuthProfile(
+            id="test-profile",
+            name="Test",
+            email="test@example.com",
+            apiUrl="http://localhost:4444",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        # Mock request exception
+        mock_post.side_effect = Exception("Connection error")
+
+        with patch("cforge.common.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.load_profile_credentials", return_value={"email": "test@example.com", "password": "test-pass"}):
+                token = attempt_auto_login()
+                assert token is None
+
+    def test_get_auth_token_with_auto_login(self, mock_settings):
+        """Test that get_auth_token attempts auto-login when no token is available."""
+        from cforge.common import get_auth_token
+
+        # Mock no env token and no file token, but successful auto-login
+        with patch("cforge.common.load_token", return_value=None):
+            with patch("cforge.common.attempt_auto_login", return_value="auto-token"):
+                token = get_auth_token()
+                assert token == "auto-token"
+
+
 class TestErrors:
     """Tests for custom error classes."""
 
