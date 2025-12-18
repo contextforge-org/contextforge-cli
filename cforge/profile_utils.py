@@ -93,8 +93,6 @@ class ProfileStore(BaseModel):
             raise ValueError(f"active_profile_id={active_profile_id} not present in profiles={profiles}")
         if not active_profile.is_active:
             raise ValueError(f"active_profile_id={active_profile_id} is not marked as active in profiles={profiles}")
-        if other_active_profiles := [p.id for p in profiles.values() if p.id != active_profile_id and p.is_active]:
-            raise ValueError(f"Found active profile ID mismatch. other_active_profiles={other_active_profiles}")
 
         return active_profile_id
 
