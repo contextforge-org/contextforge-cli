@@ -27,6 +27,7 @@ import typer
 
 # First-Party
 from cforge.config import get_settings
+from cforge.credential_store import load_profile_credentials
 from cforge.profile_utils import get_active_profile
 
 # ------------------------------------------------------------------------------
@@ -148,13 +149,56 @@ def load_token() -> Optional[str]:
     return None
 
 
+def attempt_auto_login() -> Optional[str]:
+    """Attempt to automatically login using stored credentials.
+
+    This function tries to login using credentials stored by the desktop app
+    in the encrypted credential store. If successful, it saves the token
+    and returns it.
+
+    Returns:
+        Authentication token if auto-login succeeds, None otherwise
+    """
+    # Only attempt auto-login if we have an active profile
+    profile = get_active_profile()
+    if not profile:
+        return None
+
+    # Try to load credentials from the encrypted store
+    credentials = load_profile_credentials(profile.id)
+    if not credentials or not credentials.get("email") or not credentials.get("password"):
+        return None
+
+    # Attempt login
+    try:
+        gateway_url = get_base_url()
+        response = requests.post(
+            f"{gateway_url}/auth/email/login",
+            json={"email": credentials["email"], "password": credentials["password"]},
+            headers={"Content-Type": "application/json"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            token = data.get("access_token")
+            if token:
+                # Save the token for future use
+                save_token(token)
+                return token
+    except Exception:
+        # Silently fail - auto-login is best-effort
+        pass
+
+    return None
+
+
 def get_auth_token() -> Optional[str]:
     """Get authentication token from multiple sources in priority order.
 
     Priority:
     1. MCPGATEWAY_BEARER_TOKEN environment variable
     2. Stored token in contextforge_home/token file
-    3. Basic auth from settings
+    3. Auto-login using stored credentials (if available)
 
     Returns:
         Authentication token string or None if not configured
@@ -166,6 +210,11 @@ def get_auth_token() -> Optional[str]:
 
     # Try stored token file
     token = load_token()
+    if token:
+        return token
+
+    # Try auto-login with stored credentials
+    token = attempt_auto_login()
     if token:
         return token
 
