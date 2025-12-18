@@ -119,6 +119,42 @@ class TestProfilesList:
         assert any("Currently using profile" in call for call in print_calls)
         assert any("Active Profile" in call for call in print_calls)
 
+    def test_profiles_list_without_active_profile(self, mock_console, mock_settings) -> None:
+        """Test listing profiles when there is not an active profile."""
+        from datetime import datetime
+
+        # Create test profiles with one active
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Active Profile",
+            email="active@example.com",
+            apiUrl="https://api.active.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+        profile2 = AuthProfile(
+            id="profile-2",
+            name="Inactive Profile",
+            email="inactive@example.com",
+            apiUrl="https://api.inactive.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile1, "profile-2": profile2},
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.print_table"):
+                profiles_list()
+
+        # Verify active profile message is shown
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert not any("Currently using profile" in call for call in print_calls)
+        assert not any("Active Profile" in call for call in print_calls)
+
     def test_profiles_list_error(self, mock_console, mock_settings) -> None:
         """Test listing profiles with an error."""
         with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
