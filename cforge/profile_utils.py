@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 import json
 
 # Third-Party
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 # Local
 from cforge.config import get_settings
@@ -67,6 +67,36 @@ class ProfileStore(BaseModel):
 
         # Map naming conventions
         populate_by_name = True
+
+    @field_validator("profiles")
+    def validate_profiles(cls, profiles: Dict[str, AuthProfile]) -> Dict[str, AuthProfile]:
+        """Validate that IDs match between keys and profile objects and only one
+        profile is active
+        """
+        if any(key != val.id for key, val in profiles.items()):
+            raise ValueError(f"key/id mismatch: {profiles}")
+        if len([p.id for p in profiles.values() if p.is_active]) > 1:
+            raise ValueError(f"Found multiple active profiles: {[profiles]}")
+        return profiles
+
+    @field_validator("active_profile_id")
+    def validate_active_profile_id(cls, active_profile_id: Optional[str], info: ValidationInfo) -> Optional[str]:
+        """Validate that the given active_profile_id corresponds to the given
+        profiles
+        """
+        if active_profile_id is None:
+            return active_profile_id
+
+        if not (profiles := info.data.get("profiles")):
+            raise ValueError(f"Cannot set active_profile_id={active_profile_id} without providing profiles")
+        if not (active_profile := profiles.get(active_profile_id)):
+            raise ValueError(f"active_profile_id={active_profile_id} not present in profiles={profiles}")
+        if not active_profile.is_active:
+            raise ValueError(f"active_profile_id={active_profile_id} is not marked as active in profiles={profiles}")
+        if other_active_profiles := [p.id for p in profiles.values() if p.id != active_profile_id and p.is_active]:
+            raise ValueError(f"Found active profile ID mismatch. other_active_profiles={other_active_profiles}")
+
+        return active_profile_id
 
 
 def get_profile_store_path() -> Path:
