@@ -70,6 +70,31 @@ class TestTokenManagement:
         assert str(token_file).endswith("token")
         assert token_file.parent == mock_settings.contextforge_home
 
+    def test_get_token_file_with_active_profile(self, mock_settings) -> None:
+        """Test getting the token file path uses active profile when available."""
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
+        from datetime import datetime
+
+        # Create and save an active profile
+        profile_id = "active-profile-456"
+        profile = AuthProfile(
+            id=profile_id,
+            name="Active Profile",
+            email="active@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        store = ProfileStore(
+            profiles={profile_id: profile},
+            activeProfileId=profile_id,
+        )
+        save_profile_store(store)
+
+        # get_token_file should use the active profile
+        token_file = get_token_file()
+        assert str(token_file).endswith(f"token.{profile_id}")
+
     def test_save_and_load_token(self) -> None:
         """Test saving and loading a token."""
         test_token = "test_token_123"
@@ -81,12 +106,124 @@ class TestTokenManagement:
 
         assert loaded_token == test_token
 
+    def test_save_and_load_token_with_active_profile(self, mock_settings) -> None:
+        """Test saving and loading a token with an active profile."""
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
+        from datetime import datetime
+
+        test_token = "profile_token_456"
+        profile_id = "test-profile-789"
+
+        # Create and save an active profile
+        profile = AuthProfile(
+            id=profile_id,
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        store = ProfileStore(
+            profiles={profile_id: profile},
+            activeProfileId=profile_id,
+        )
+        save_profile_store(store)
+
+        # Save and load token - should use profile-specific file
+        save_token(test_token)
+        loaded_token = load_token()
+
+        assert loaded_token == test_token
+
+        # Verify it was saved to profile-specific file
+        token_file = mock_settings.contextforge_home / f"token.{profile_id}"
+        assert token_file.exists()
+
+    def test_save_token_different_profiles(self, mock_settings) -> None:
+        """Test that different profiles have separate token files."""
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
+        from datetime import datetime
+
+        token1 = "token_for_profile_1"
+        token2 = "token_for_profile_2"
+        profile_id1 = "profile-1"
+        profile_id2 = "profile-2"
+
+        # Save token for profile 1
+        profile1 = AuthProfile(
+            id=profile_id1,
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        store1 = ProfileStore(
+            profiles={profile_id1: profile1},
+            activeProfileId=profile_id1,
+        )
+        save_profile_store(store1)
+        save_token(token1)
+
+        # Save token for profile 2
+        profile2 = AuthProfile(
+            id=profile_id2,
+            name="Profile 2",
+            email="user2@example.com",
+            apiUrl="https://api2.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        store2 = ProfileStore(
+            profiles={profile_id2: profile2},
+            activeProfileId=profile_id2,
+        )
+        save_profile_store(store2)
+        save_token(token2)
+
+        # Verify both tokens exist in separate files
+        token_file1 = mock_settings.contextforge_home / f"token.{profile_id1}"
+        token_file2 = mock_settings.contextforge_home / f"token.{profile_id2}"
+
+        assert token_file1.exists()
+        assert token_file2.exists()
+        assert token_file1.read_text() == token1
+        assert token_file2.read_text() == token2
+        assert token1 != token2
+
     def test_load_token_nonexistent(self, tmp_path: Path) -> None:
         """Test loading a token when file doesn't exist."""
         nonexistent_file = tmp_path / "nonexistent" / "token"
 
         with patch("cforge.common.get_token_file", return_value=nonexistent_file):
             token = load_token()
+
+        assert token is None
+
+    def test_load_token_nonexistent_profile(self, mock_settings) -> None:
+        """Test loading a token for a profile that doesn't have a token file."""
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
+        from datetime import datetime
+
+        profile_id = "nonexistent-profile"
+
+        # Create an active profile but don't create a token file
+        profile = AuthProfile(
+            id=profile_id,
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        store = ProfileStore(
+            profiles={profile_id: profile},
+            activeProfileId=profile_id,
+        )
+        save_profile_store(store)
+
+        # Try to load token - should return None since file doesn't exist
+        token = load_token()
 
         assert token is None
 

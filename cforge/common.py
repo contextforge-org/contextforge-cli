@@ -113,11 +113,14 @@ def get_base_url() -> str:
 def get_token_file() -> Path:
     """Get the path to the token file in contextforge_home.
 
+    Uses the active profile if available, otherwise returns the default token file.
+
     Returns:
-        Path to the token file
+        Path to the token file (profile-specific or default)
     """
-    token_file = get_settings().contextforge_home / "token"
-    return token_file
+    if profile := get_active_profile():
+        return get_settings().contextforge_home / f"token.{profile.id}"
+    return get_settings().contextforge_home / "token"
 
 
 def save_token(token: str) -> None:
