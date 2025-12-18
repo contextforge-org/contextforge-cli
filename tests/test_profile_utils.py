@@ -112,15 +112,138 @@ class TestProfileModels:
             createdAt=datetime.now(),
         )
 
-        store = ProfileStore(
+        ProfileStore(
             profiles={"profile-1": profile1, "profile-2": profile2},
             activeProfileId="profile-1",
         )
 
-        assert len(store.profiles) == 2
-        assert store.active_profile_id == "profile-1"
-        assert "profile-1" in store.profiles
-        assert "profile-2" in store.profiles
+    def test_profile_store_key_id_mismatch(self) -> None:
+        """Test ProfileStore validation fails when key doesn't match profile ID."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        try:
+            ProfileStore(
+                profiles={"wrong-key": profile},  # Key doesn't match profile.id
+                activeProfileId="profile-1",
+            )
+            assert False, "Expected ValueError for key/id mismatch"
+        except ValueError as e:
+            assert "key/id mismatch" in str(e)
+
+    def test_profile_store_multiple_active_profiles(self) -> None:
+        """Test ProfileStore validation fails when multiple profiles are active."""
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        profile2 = AuthProfile(
+            id="profile-2",
+            name="Profile 2",
+            email="user2@example.com",
+            apiUrl="https://api2.example.com",
+            isActive=True,  # Both profiles are active
+            createdAt=datetime.now(),
+        )
+
+        try:
+            ProfileStore(
+                profiles={"profile-1": profile1, "profile-2": profile2},
+                activeProfileId="profile-1",
+            )
+            assert False, "Expected ValueError for multiple active profiles"
+        except ValueError as e:
+            assert "Found multiple active profiles" in str(e)
+
+    def test_profile_store_active_id_without_profiles(self) -> None:
+        """Test ProfileStore validation fails when active_profile_id is set without profiles."""
+        try:
+            ProfileStore(
+                profiles={},
+                activeProfileId="profile-1",
+            )
+            assert False, "Expected ValueError for active_profile_id without profiles"
+        except ValueError as e:
+            assert "Cannot set active_profile_id" in str(e)
+            assert "without providing profiles" in str(e)
+
+    def test_profile_store_active_id_not_in_profiles(self) -> None:
+        """Test ProfileStore validation fails when active_profile_id is not in profiles."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        try:
+            ProfileStore(
+                profiles={"profile-1": profile},
+                activeProfileId="profile-2",  # ID not in profiles
+            )
+            assert False, "Expected ValueError for active_profile_id not in profiles"
+        except ValueError as e:
+            assert "not present in profiles" in str(e)
+
+    def test_profile_store_active_id_not_marked_active(self) -> None:
+        """Test ProfileStore validation fails when active_profile_id profile is not marked active."""
+        profile = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=False,  # Not marked as active
+            createdAt=datetime.now(),
+        )
+
+        try:
+            ProfileStore(
+                profiles={"profile-1": profile},
+                activeProfileId="profile-1",
+            )
+            assert False, "Expected ValueError for active_profile_id not marked as active"
+        except ValueError as e:
+            assert "is not marked as active" in str(e)
+
+    def test_profile_store_active_id_mismatch(self) -> None:
+        """Test ProfileStore validation fails when active_profile_id doesn't match the active profile."""
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+        profile2 = AuthProfile(
+            id="profile-2",
+            name="Profile 2",
+            email="user2@example.com",
+            apiUrl="https://api2.example.com",
+            isActive=True,  # profile-2 is active
+            createdAt=datetime.now(),
+        )
+
+        try:
+            ProfileStore(
+                profiles={"profile-1": profile1, "profile-2": profile2},
+                activeProfileId="profile-1",  # But active_profile_id points to profile-1
+            )
+            assert False, "Expected ValueError for active profile ID mismatch"
+        except ValueError as e:
+            assert "is not marked as active" in str(e)
 
     def test_profile_store_empty(self) -> None:
         """Test creating empty ProfileStore."""
