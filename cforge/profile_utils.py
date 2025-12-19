@@ -20,6 +20,9 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator
 # Local
 from cforge.config import get_settings
 
+# Virtual default profile ID for local development
+DEFAULT_PROFILE_ID = "__default__"
+
 
 class ProfileMetadata(BaseModel):
     """Metadata for a profile."""
@@ -138,18 +141,36 @@ def save_profile_store(store: ProfileStore) -> None:
 
 
 def get_all_profiles() -> List[AuthProfile]:
-    """Get all profiles.
+    """Get all profiles, including the virtual default profile.
 
     Returns:
-        List of all profiles, empty list if none found
+        List of all profiles, including virtual default if no store exists
     """
+    profiles = []
     if store := load_profile_store():
-        return list(store.profiles.values())
-    return []
+        profiles = list(store.profiles.values())
+
+    # Always include the virtual default profile
+    settings = get_settings()
+    default_profile = AuthProfile(
+        id=DEFAULT_PROFILE_ID,
+        name="Local Default",
+        email="admin@localhost",
+        api_url=f"http://{settings.host}:{settings.port}",
+        is_active=not bool(store and store.active_profile_id),
+        created_at=datetime.now(),
+        metadata=ProfileMetadata(
+            description="Default local development profile",
+            environment="local",
+        ),
+    )
+    profiles.append(default_profile)
+
+    return profiles
 
 
 def get_profile(profile_id: str) -> Optional[AuthProfile]:
-    """Get a specific profile by ID.
+    """Get a specific profile by ID, including the virtual default profile.
 
     Args:
         profile_id: Profile ID to retrieve
@@ -157,22 +178,54 @@ def get_profile(profile_id: str) -> Optional[AuthProfile]:
     Returns:
         AuthProfile if found, None otherwise
     """
+    # Check for virtual default profile
+    if profile_id == DEFAULT_PROFILE_ID:
+        settings = get_settings()
+        store = load_profile_store()
+        return AuthProfile(
+            id=DEFAULT_PROFILE_ID,
+            name="Local Default",
+            email="admin@localhost",
+            api_url=f"http://{settings.host}:{settings.port}",
+            is_active=not bool(store and store.active_profile_id),
+            created_at=datetime.now(),
+            metadata=ProfileMetadata(
+                description="Default local development profile",
+                environment="local",
+            ),
+        )
+
     if store := load_profile_store():
         return store.profiles.get(profile_id)
 
 
 def get_active_profile() -> Optional[AuthProfile]:
-    """Get the currently active profile.
+    """Get the currently active profile, including the virtual default profile.
 
     Returns:
-        AuthProfile if an active profile is set, None otherwise
+        AuthProfile if an active profile is set, or the virtual default profile
     """
     if (store := load_profile_store()) and store.active_profile_id:
         return store.profiles.get(store.active_profile_id)
 
+    # Return virtual default profile if no active profile
+    settings = get_settings()
+    return AuthProfile(
+        id=DEFAULT_PROFILE_ID,
+        name="Local Default",
+        email="admin@localhost",
+        api_url=f"http://{settings.host}:{settings.port}",
+        is_active=True,
+        created_at=datetime.now(),
+        metadata=ProfileMetadata(
+            description="Default local development profile",
+            environment="local",
+        ),
+    )
+
 
 def set_active_profile(profile_id: str) -> bool:
-    """Set the active profile.
+    """Set the active profile, including support for the virtual default profile.
 
     Args:
         profile_id: Profile ID to set as active
@@ -180,6 +233,18 @@ def set_active_profile(profile_id: str) -> bool:
     Returns:
         True if successful, False if profile not found
     """
+    # Handle virtual default profile
+    if profile_id == DEFAULT_PROFILE_ID:
+        store = load_profile_store()
+        if store:
+            # Deactivate all profiles to switch to default
+            for pid in store.profiles:
+                store.profiles[pid].is_active = False
+            store.active_profile_id = None
+            save_profile_store(store)
+        # Always return True for default profile (it always exists)
+        return True
+
     store = load_profile_store()
     if not store:
         return False

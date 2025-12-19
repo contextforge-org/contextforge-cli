@@ -115,11 +115,17 @@ def get_token_file() -> Path:
     """Get the path to the token file in contextforge_home.
 
     Uses the active profile if available, otherwise returns the default token file.
+    For the virtual default profile, uses the unsuffixed token file.
 
     Returns:
         Path to the token file (profile-specific or default)
     """
+    from cforge.profile_utils import DEFAULT_PROFILE_ID
+
     if profile := get_active_profile():
+        # Use unsuffixed token file for default profile
+        if profile.id == DEFAULT_PROFILE_ID:
+            return get_settings().contextforge_home / "token"
         return get_settings().contextforge_home / f"token.{profile.id}"
     return get_settings().contextforge_home / "token"
 
