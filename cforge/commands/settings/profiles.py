@@ -9,7 +9,9 @@ CLI commands for profile management
 
 # Standard
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
+import json
 import secrets
 import string
 
@@ -171,7 +173,9 @@ def profiles_switch(
         raise typer.Exit(1)
 
 
-def profiles_create() -> None:
+def profiles_create(
+    data_file: Optional[Path] = typer.Argument(None, help="JSON file containing prompt data (interactive mode if not provided)"),
+) -> None:
     """Create a new profile interactively.
 
     Walks the user through creating a new profile by prompting for all required
@@ -197,8 +201,14 @@ def profiles_create() -> None:
             "last_used": None,
         }
 
-        # Prompt for profile data using the schema
-        profile_data = prompt_for_schema(AuthProfile, prefilled=prefilled)
+        if data_file:
+            if not data_file.exists():
+                console.print(f"[red]File not found: {data_file}[/red]")
+                raise typer.Exit(1)
+            profile_data = json.loads(data_file.read_text())
+            profile_data.update(prefilled)
+        else:
+            profile_data = prompt_for_schema(AuthProfile, prefilled=prefilled)
 
         # Create the AuthProfile instance
         new_profile = AuthProfile.model_validate(profile_data)

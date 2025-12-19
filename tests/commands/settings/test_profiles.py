@@ -9,7 +9,10 @@ Tests for profile management CLI commands.
 
 # Standard
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import Mock, patch
+import json
+import tempfile
 
 # Third-Party
 import pytest
@@ -658,3 +661,30 @@ class TestProfilesCreate:
         assert len(updated_store.profiles) == 2
         assert "existing-profile" in updated_store.profiles
         assert "new-profile-id" in updated_store.profiles
+
+    def test_profiles_create_data_file(self, mock_console, mock_settings) -> None:
+        """Test successfully creating a new profile using a data file."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.typer.confirm", return_value=False):
+                data_file_content = {
+                    "name": "Test Profile",
+                    "email": "test@example.com",
+                    "api_url": "https://api.test.com",
+                    "is_active": False,
+                }
+                with tempfile.NamedTemporaryFile("w") as data_file:
+                    data_file.write(json.dumps(data_file_content))
+                    data_file.flush()
+                    profiles_create(Path(data_file.name))
+
+        # Verify both profiles exist in the store
+        updated_store = load_profile_store()
+        assert updated_store is not None
+        assert len(updated_store.profiles) == 1
+        profile_id = list(updated_store.profiles.keys())[0]
+        profile = list(updated_store.profiles.values())[0]
+        assert profile.id == profile_id
+        assert profile.name == data_file_content["name"]
+        assert profile.email == data_file_content["email"]
+        assert profile.api_url == data_file_content["api_url"]
+        assert profile.is_active == data_file_content["is_active"]
