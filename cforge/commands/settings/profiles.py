@@ -42,11 +42,6 @@ def profiles_list() -> None:
     try:
         profiles = get_all_profiles()
 
-        if not profiles:
-            console.print("[yellow]No profiles found.[/yellow]")
-            console.print("[dim]Profiles are managed through the Context Forge Desktop app.[/dim]")
-            return
-
         # Prepare data for table
         profile_data = []
         for profile in profiles:
@@ -69,9 +64,8 @@ def profiles_list() -> None:
 
         # Show which profile is currently active
         active = get_active_profile()
-        if active:
-            console.print(f"\n[green]Currently using profile:[/green] [cyan]{active.name}[/cyan] ({active.email})")
-            console.print(f"[dim]Connected to: {active.api_url}[/dim]")
+        console.print(f"\n[green]Currently using profile:[/green] [cyan]{active.name}[/cyan] ({active.email})")
+        console.print(f"[dim]Connected to: {active.api_url}[/dim]")
 
     except Exception as e:
         console.print(f"[red]Error listing profiles: {str(e)}[/red]")
@@ -104,10 +98,6 @@ def profiles_get(
                 raise typer.Exit(1)
         else:
             profile = get_active_profile()
-            if not profile:
-                console.print("[yellow]No active profile set.[/yellow]")
-                console.print("[dim]Use 'cforge profiles switch <profile-id>' to set an active profile.[/dim]")
-                raise typer.Exit(1)
 
         if json_output:
             # Output as JSON
@@ -190,10 +180,6 @@ def profiles_current() -> None:
 
     try:
         profile = get_active_profile()
-        if not profile:
-            console.print("[yellow]No active profile set.[/yellow]")
-            console.print("[dim]Use 'cforge profiles switch <profile-id>' to set an active profile.[/dim]")
-            return
 
         console.print(f"\n[bold green]Current Profile:[/bold green] [cyan]{profile.name}[/cyan]")
         console.print(f"[dim]Email:[/dim] {profile.email}")

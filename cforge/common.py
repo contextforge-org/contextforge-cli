@@ -26,6 +26,7 @@ import requests
 import typer
 
 # First-Party
+from cforge.profile_utils import DEFAULT_PROFILE_ID
 from cforge.config import get_settings
 from cforge.credential_store import load_profile_credentials
 from cforge.profile_utils import get_active_profile
@@ -106,9 +107,7 @@ def get_base_url() -> str:
     Returns:
         The string URL base
     """
-    if profile := get_active_profile():
-        return profile.api_url
-    return f"http://{get_settings().host}:{get_settings().port}"
+    return get_active_profile().api_url
 
 
 def get_token_file() -> Path:
@@ -120,14 +119,9 @@ def get_token_file() -> Path:
     Returns:
         Path to the token file (profile-specific or default)
     """
-    from cforge.profile_utils import DEFAULT_PROFILE_ID
-
-    if profile := get_active_profile():
-        # Use unsuffixed token file for default profile
-        if profile.id == DEFAULT_PROFILE_ID:
-            return get_settings().contextforge_home / "token"
-        return get_settings().contextforge_home / f"token.{profile.id}"
-    return get_settings().contextforge_home / "token"
+    profile = get_active_profile()
+    suffix = "" if profile.id == DEFAULT_PROFILE_ID else f".{profile.id}"
+    return get_settings().contextforge_home / f"token{suffix}"
 
 
 def save_token(token: str) -> None:
@@ -165,12 +159,8 @@ def attempt_auto_login() -> Optional[str]:
     Returns:
         Authentication token if auto-login succeeds, None otherwise
     """
-    # Only attempt auto-login if we have an active profile
-    profile = get_active_profile()
-    if not profile:
-        return None
-
     # Try to load credentials from the encrypted store
+    profile = get_active_profile()
     credentials = load_profile_credentials(profile.id)
     if not credentials or not credentials.get("email") or not credentials.get("password"):
         return None

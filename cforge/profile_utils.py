@@ -122,7 +122,6 @@ def load_profile_store() -> Optional[ProfileStore]:
                 return ProfileStore.model_validate(data)
         except (json.JSONDecodeError, ValueError) as e:
             print(f"Warning: Failed to load profile store: {e}")
-            return None
 
 
 def save_profile_store(store: ProfileStore) -> None:
@@ -235,8 +234,7 @@ def set_active_profile(profile_id: str) -> bool:
     """
     # Handle virtual default profile
     if profile_id == DEFAULT_PROFILE_ID:
-        store = load_profile_store()
-        if store:
+        if store := load_profile_store():
             # Deactivate all profiles to switch to default
             for pid in store.profiles:
                 store.profiles[pid].is_active = False
