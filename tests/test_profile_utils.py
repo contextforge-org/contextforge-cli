@@ -638,6 +638,119 @@ class TestSetActiveProfile:
         assert updated_store is not None
         assert updated_store.profiles["profile-1"].last_used is not None
 
+
+class TestDesktopDefaultProfile:
+    """Tests for Desktop app default profile detection."""
+
+    def test_get_all_profiles_with_desktop_default(self, mock_settings) -> None:
+        """Test that virtual default is not included when Desktop default exists."""
+        # Create a Desktop-created default profile
+        desktop_default = AuthProfile(
+            id="random-desktop-id",
+            name="Desktop Default",
+            email="admin@localhost",
+            apiUrl=f"http://{mock_settings.host}:{mock_settings.port}",
+            isActive=True,
+            createdAt=datetime.now(),
+            metadata=ProfileMetadata(
+                description="Desktop default profile",
+                environment="local",
+                is_internal=True,
+            ),
+        )
+
+        store = ProfileStore(
+            profiles={"random-desktop-id": desktop_default},
+            activeProfileId="random-desktop-id",
+        )
+        save_profile_store(store)
+
+        profiles = get_all_profiles()
+
+        # Should only have the Desktop default, not the virtual default
+        assert len(profiles) == 1
+        assert profiles[0].id == "random-desktop-id"
+        assert profiles[0].metadata.is_internal is True
+        assert not any(p.id == DEFAULT_PROFILE_ID for p in profiles)
+
+    def test_get_all_profiles_without_desktop_default(self, mock_settings) -> None:
+        """Test that virtual default is included when no Desktop default exists."""
+        # Create a non-default profile
+        profile = AuthProfile(
+            id="profile-1",
+            name="Custom Profile",
+            email="user@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        profiles = get_all_profiles()
+
+        # Should have both the custom profile and virtual default
+        assert len(profiles) == 2
+        assert any(p.id == "profile-1" for p in profiles)
+        assert any(p.id == DEFAULT_PROFILE_ID for p in profiles)
+
+    def test_get_active_profile_with_desktop_default_inactive(self, mock_settings) -> None:
+        """Test that None is returned when Desktop default exists but is not active."""
+        # Create a Desktop-created default profile that is NOT active
+        desktop_default = AuthProfile(
+            id="random-desktop-id",
+            name="Desktop Default",
+            email="admin@localhost",
+            apiUrl=f"http://{mock_settings.host}:{mock_settings.port}",
+            isActive=False,
+            createdAt=datetime.now(),
+            metadata=ProfileMetadata(
+                description="Desktop default profile",
+                environment="local",
+                is_internal=True,
+            ),
+        )
+
+        store = ProfileStore(
+            profiles={"random-desktop-id": desktop_default},
+            activeProfileId=None,
+        )
+        save_profile_store(store)
+
+        result = get_active_profile()
+
+        # Should return None because Desktop default exists (even if not active)
+        assert result is None
+
+    def test_get_active_profile_without_desktop_default(self, mock_settings) -> None:
+        """Test that virtual default is returned when no Desktop default exists."""
+        # Create a non-default profile that is NOT active
+        profile = AuthProfile(
+            id="profile-1",
+            name="Custom Profile",
+            email="user@example.com",
+            apiUrl="https://api.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId=None,
+        )
+        save_profile_store(store)
+
+        result = get_active_profile()
+
+        # Should return virtual default
+        assert result is not None
+        assert result.id == DEFAULT_PROFILE_ID
+        assert result.name == "Local Default"
+
     def test_set_active_profile_default_no_store(self, mock_settings) -> None:
         """Test setting active profile to the default with no store passes"""
         result = set_active_profile(DEFAULT_PROFILE_ID)

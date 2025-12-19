@@ -100,6 +100,15 @@ class ProfileStore(BaseModel):
         return active_profile_id
 
 
+def get_default_api_url() -> str:
+    """Get the default API URL if not set via a profile
+
+    Returns:
+        URL based on configured settings
+    """
+    return f"http://{get_settings().host}:{get_settings().port}"
+
+
 def get_profile_store_path() -> Path:
     """Get the path to the profile store file.
 
@@ -143,27 +152,31 @@ def get_all_profiles() -> List[AuthProfile]:
     """Get all profiles, including the virtual default profile.
 
     Returns:
-        List of all profiles, including virtual default if no store exists
+        List of all profiles, including virtual default if no Desktop default exists
     """
     profiles = []
     if store := load_profile_store():
         profiles = list(store.profiles.values())
 
-    # Always include the virtual default profile
-    settings = get_settings()
-    default_profile = AuthProfile(
-        id=DEFAULT_PROFILE_ID,
-        name="Local Default",
-        email="admin@localhost",
-        api_url=f"http://{settings.host}:{settings.port}",
-        is_active=not bool(store and store.active_profile_id),
-        created_at=datetime.now(),
-        metadata=ProfileMetadata(
-            description="Default local development profile",
-            environment="local",
-        ),
-    )
-    profiles.append(default_profile)
+    # Check if Desktop app has created a default profile
+    expected_default_url = get_default_api_url()
+    has_desktop_default = any(p.api_url == expected_default_url and p.metadata and p.metadata.is_internal for p in profiles)
+
+    # Only include virtual default if Desktop hasn't created one
+    if not has_desktop_default:
+        default_profile = AuthProfile(
+            id=DEFAULT_PROFILE_ID,
+            name="Local Default",
+            email="admin@localhost",
+            api_url=expected_default_url,
+            is_active=not bool(store and store.active_profile_id),
+            created_at=datetime.now(),
+            metadata=ProfileMetadata(
+                description="Default local development profile",
+                environment="local",
+            ),
+        )
+        profiles.append(default_profile)
 
     return profiles
 
@@ -179,13 +192,12 @@ def get_profile(profile_id: str) -> Optional[AuthProfile]:
     """
     # Check for virtual default profile
     if profile_id == DEFAULT_PROFILE_ID:
-        settings = get_settings()
         store = load_profile_store()
         return AuthProfile(
             id=DEFAULT_PROFILE_ID,
             name="Local Default",
             email="admin@localhost",
-            api_url=f"http://{settings.host}:{settings.port}",
+            api_url=get_default_api_url(),
             is_active=not bool(store and store.active_profile_id),
             created_at=datetime.now(),
             metadata=ProfileMetadata(
@@ -203,17 +215,26 @@ def get_active_profile() -> Optional[AuthProfile]:
 
     Returns:
         AuthProfile if an active profile is set, or the virtual default profile
+        if no Desktop default exists
     """
     if (store := load_profile_store()) and store.active_profile_id:
         return store.profiles.get(store.active_profile_id)
 
-    # Return virtual default profile if no active profile
-    settings = get_settings()
+    # Check if Desktop app has created a default profile
+    expected_default_url = get_default_api_url()
+
+    if store:
+        for profile in store.profiles.values():
+            if profile.api_url == expected_default_url and profile.metadata and profile.metadata.is_internal:
+                # Desktop default exists, return None (no active profile)
+                return None
+
+    # Return virtual default profile if no Desktop default exists
     return AuthProfile(
         id=DEFAULT_PROFILE_ID,
         name="Local Default",
         email="admin@localhost",
-        api_url=f"http://{settings.host}:{settings.port}",
+        api_url=expected_default_url,
         is_active=True,
         created_at=datetime.now(),
         metadata=ProfileMetadata(
