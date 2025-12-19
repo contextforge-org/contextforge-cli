@@ -133,6 +133,7 @@ profiles_app.command("list")(profiles.profiles_list)
 profiles_app.command("get")(profiles.profiles_get)
 profiles_app.command("switch")(profiles.profiles_switch)
 profiles_app.command("current")(profiles.profiles_current)
+profiles_app.command("create")(profiles.profiles_create)
 
 # ---------------------------------------------------------------------------
 # Deploy command (hidden stub for future use)

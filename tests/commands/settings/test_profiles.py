@@ -17,6 +17,7 @@ import typer
 
 # First-Party
 from cforge.commands.settings.profiles import (
+    profiles_create,
     profiles_current,
     profiles_get,
     profiles_list,
@@ -539,3 +540,129 @@ class TestProfilesCurrent:
         assert any("Current Profile" in call for call in print_calls)
         assert any("current@example.com" in call for call in print_calls)
         assert not any("Environment:" in call for call in print_calls)
+
+
+class TestProfilesCreate:
+    """Tests for profiles create command."""
+
+    def test_profiles_create_success(self, mock_console, mock_settings) -> None:
+        """Test successfully creating a new profile."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.prompt_for_schema") as mock_prompt:
+                with patch("cforge.commands.settings.profiles.typer.confirm", return_value=False):
+                    # Mock the prompt to return profile data
+                    mock_prompt.return_value = {
+                        "id": "test-profile-id",
+                        "name": "Test Profile",
+                        "email": "test@example.com",
+                        "api_url": "https://api.test.com",
+                        "is_active": False,
+                        "created_at": datetime.now(),
+                    }
+
+                    profiles_create()
+
+        # Verify success message
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Profile created successfully" in call for call in print_calls)
+        assert any("Test Profile" in call for call in print_calls)
+
+    def test_profiles_create_and_enable(self, mock_console, mock_settings) -> None:
+        """Test creating a profile and enabling it."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.prompt_for_schema") as mock_prompt:
+                with patch("cforge.commands.settings.profiles.typer.confirm", return_value=True):
+                    with patch("cforge.commands.settings.profiles.set_active_profile", return_value=True) as set_active_profile_mock:
+                        with patch("cforge.commands.settings.profiles.get_settings") as mock_get_settings:
+                            mock_get_settings.cache_clear = Mock()
+
+                            # Mock the prompt to return profile data
+                            mock_prompt.return_value = {
+                                "id": "test-profile-id",
+                                "name": "Test Profile",
+                                "email": "test@example.com",
+                                "api_url": "https://api.test.com",
+                                "is_active": False,
+                                "created_at": datetime.now(),
+                            }
+
+                            profiles_create()
+
+        # Verify success and enable messages
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Profile created successfully" in call for call in print_calls)
+        assert any("Profile enabled" in call for call in print_calls)
+        set_active_profile_mock.assert_called_with("test-profile-id")
+
+    def test_profiles_create_error(self, mock_console, mock_settings) -> None:
+        """Test creating profile with an error."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.prompt_for_schema", side_effect=Exception("Test error")):
+                with pytest.raises(typer.Exit) as exc_info:
+                    profiles_create()
+
+        assert exc_info.value.exit_code == 1
+        assert any("Error creating profile" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_profiles_create_enable_fails(self, mock_console, mock_settings) -> None:
+        """Test creating profile but enabling fails."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.prompt_for_schema") as mock_prompt:
+                with patch("cforge.commands.settings.profiles.typer.confirm", return_value=True):
+                    with patch("cforge.commands.settings.profiles.set_active_profile", return_value=False):
+                        # Mock the prompt to return profile data
+                        mock_prompt.return_value = {
+                            "id": "test-profile-id",
+                            "name": "Test Profile",
+                            "email": "test@example.com",
+                            "api_url": "https://api.test.com",
+                            "is_active": False,
+                            "created_at": datetime.now(),
+                        }
+
+                        profiles_create()
+
+        # Verify failure message
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Failed to enable profile" in call for call in print_calls)
+
+    def test_profiles_create_with_existing_store(self, mock_console, mock_settings) -> None:
+        """Test creating a profile when a profile store already exists."""
+        from cforge.profile_utils import load_profile_store
+
+        # Create an existing profile store
+        existing_profile = AuthProfile(
+            id="existing-profile",
+            name="Existing Profile",
+            email="existing@example.com",
+            apiUrl="https://api.existing.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        store = ProfileStore(
+            profiles={"existing-profile": existing_profile},
+            activeProfileId="existing-profile",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.prompt_for_schema") as mock_prompt:
+                with patch("cforge.commands.settings.profiles.typer.confirm", return_value=False):
+                    # Mock the prompt to return profile data
+                    mock_prompt.return_value = {
+                        "id": "new-profile-id",
+                        "name": "New Profile",
+                        "email": "new@example.com",
+                        "api_url": "https://api.new.com",
+                        "is_active": False,
+                        "created_at": datetime.now(),
+                    }
+
+                    profiles_create()
+
+        # Verify both profiles exist in the store
+        updated_store = load_profile_store()
+        assert updated_store is not None
+        assert len(updated_store.profiles) == 2
+        assert "existing-profile" in updated_store.profiles
+        assert "new-profile-id" in updated_store.profiles

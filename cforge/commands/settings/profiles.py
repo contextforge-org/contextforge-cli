@@ -8,19 +8,26 @@ CLI commands for profile management
 """
 
 # Standard
+from datetime import datetime
 from typing import Optional
+import secrets
+import string
 
 # Third-Party
 import typer
 
 # First-Party
-from cforge.common import get_console, print_table, print_json
+from cforge.common import get_console, print_table, print_json, prompt_for_schema
 from cforge.config import get_settings
 from cforge.profile_utils import (
+    AuthProfile,
+    ProfileStore,
     get_all_profiles,
     get_profile,
     get_active_profile,
     set_active_profile,
+    load_profile_store,
+    save_profile_store,
 )
 
 
@@ -196,4 +203,71 @@ def profiles_current() -> None:
 
     except Exception as e:
         console.print(f"[red]Error retrieving current profile: {str(e)}[/red]")
+        raise typer.Exit(1)
+
+
+def profiles_create() -> None:
+    """Create a new profile interactively.
+
+    Walks the user through creating a new profile by prompting for all required
+    fields. The new profile will be created in an inactive state. After creation,
+    you will be asked if you want to enable the new profile.
+    """
+    console = get_console()
+
+    try:
+        console.print("\n[bold cyan]Create New Profile[/bold cyan]")
+        console.print("[dim]You will be prompted for profile information.[/dim]\n")
+
+        # Generate a 16-character random ID (matching desktop app format)
+        alphabet = string.ascii_letters + string.digits
+        profile_id = "".join(secrets.choice(alphabet) for _ in range(16))
+        created_at = datetime.now()
+
+        # Pre-fill fields that should not be prompted
+        prefilled = {
+            "id": profile_id,
+            "is_active": False,
+            "created_at": created_at,
+            "last_used": None,
+        }
+
+        # Prompt for profile data using the schema
+        profile_data = prompt_for_schema(AuthProfile, prefilled=prefilled)
+
+        # Create the AuthProfile instance
+        new_profile = AuthProfile.model_validate(profile_data)
+
+        # Load or create the profile store
+        store = load_profile_store()
+        if not store:
+            store = ProfileStore(profiles={}, active_profile_id=None)
+
+        # Add the new profile to the store
+        store.profiles[new_profile.id] = new_profile
+
+        # Save the profile store
+        save_profile_store(store)
+
+        console.print("\n[green]✓ Profile created successfully![/green]")
+        console.print(f"[dim]Profile ID:[/dim] {new_profile.id}")
+        console.print(f"[dim]Name:[/dim] {new_profile.name}")
+        console.print(f"[dim]Email:[/dim] {new_profile.email}")
+        console.print(f"[dim]API URL:[/dim] {new_profile.api_url}")
+
+        # Ask if the user wants to enable the new profile
+        console.print("\n[yellow]Enable this profile now?[/yellow]", end=" ")
+        if typer.confirm("", default=False):
+            success = set_active_profile(new_profile.id)
+            if success:
+                console.print(f"[green]✓ Profile enabled:[/green] [cyan]{new_profile.name}[/cyan]")
+                # Clear the settings cache so the new profile takes effect
+                get_settings.cache_clear()
+            else:
+                console.print(f"[red]Failed to enable profile: {new_profile.id}[/red]")
+        else:
+            console.print("[dim]Profile created but not enabled. Use 'cforge profiles switch' to enable it later.[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Error creating profile: {str(e)}[/red]")
         raise typer.Exit(1)
