@@ -132,7 +132,6 @@ app.add_typer(profiles_app, name="profiles", rich_help_panel="Settings")
 profiles_app.command("list")(profiles.profiles_list)
 profiles_app.command("get")(profiles.profiles_get)
 profiles_app.command("switch")(profiles.profiles_switch)
-profiles_app.command("current")(profiles.profiles_current)
 profiles_app.command("create")(profiles.profiles_create)
 
 # ---------------------------------------------------------------------------

@@ -18,7 +18,6 @@ import typer
 # First-Party
 from cforge.commands.settings.profiles import (
     profiles_create,
-    profiles_current,
     profiles_get,
     profiles_list,
     profiles_switch,
@@ -533,108 +532,6 @@ class TestProfilesSwitch:
 
         assert exc_info.value.exit_code == 1
         assert any("Failed to switch to profile" in str(call) for call in mock_console.print.call_args_list)
-
-
-class TestProfilesCurrent:
-    """Tests for profiles current command."""
-
-    def test_profiles_current_success(self, mock_console, mock_settings) -> None:
-        """Test showing the current profile."""
-        profile = AuthProfile(
-            id="profile-1",
-            name="Current Profile",
-            email="current@example.com",
-            apiUrl="https://api.example.com",
-            isActive=True,
-            createdAt=datetime.now(),
-            metadata=ProfileMetadata(environment="production"),
-        )
-
-        store = ProfileStore(
-            profiles={"profile-1": profile},
-            activeProfileId="profile-1",
-        )
-        save_profile_store(store)
-
-        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
-            profiles_current()
-
-        # Verify current profile was shown
-        print_calls = [str(call) for call in mock_console.print.call_args_list]
-        assert any("Current Profile" in call for call in print_calls)
-        assert any("current@example.com" in call for call in print_calls)
-        assert any("production" in call for call in print_calls)
-
-    def test_profiles_current_none_set(self, mock_console, mock_settings) -> None:
-        """Test showing current profile when none is set (should show default)."""
-        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
-            profiles_current()
-
-        # Should show the virtual default profile
-        print_calls = [str(call) for call in mock_console.print.call_args_list]
-        assert any("Local Default" in call for call in print_calls)
-
-    def test_profiles_current_with_environment(self, mock_console, mock_settings) -> None:
-        """Test showing current profile with environment metadata."""
-        profile = AuthProfile(
-            id="profile-1",
-            name="Current Profile",
-            email="current@example.com",
-            apiUrl="https://api.example.com",
-            isActive=True,
-            createdAt=datetime.now(),
-            metadata=ProfileMetadata(environment="staging"),
-        )
-
-        store = ProfileStore(
-            profiles={"profile-1": profile},
-            activeProfileId="profile-1",
-        )
-        save_profile_store(store)
-
-        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
-            profiles_current()
-
-        # Verify environment is shown
-        print_calls = [str(call) for call in mock_console.print.call_args_list]
-        assert any("Environment" in call and "staging" in call for call in print_calls)
-
-    def test_profiles_current_error(self, mock_console, mock_settings) -> None:
-        """Test showing current profile with an error."""
-        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
-            with patch("cforge.commands.settings.profiles.get_active_profile", side_effect=Exception("Test error")):
-                with pytest.raises(typer.Exit) as exc_info:
-                    profiles_current()
-
-        assert exc_info.value.exit_code == 1
-        assert any("Error retrieving current profile" in str(call) for call in mock_console.print.call_args_list)
-
-    def test_profiles_current_no_environment(self, mock_console, mock_settings) -> None:
-        """Test showing the current profile works when environment is unset."""
-        profile = AuthProfile(
-            id="profile-1",
-            name="Current Profile",
-            email="current@example.com",
-            apiUrl="https://api.example.com",
-            isActive=True,
-            createdAt=datetime.now(),
-            metadata=ProfileMetadata(isInternal=True),
-        )
-
-        store = ProfileStore(
-            profiles={"profile-1": profile},
-            activeProfileId="profile-1",
-        )
-        save_profile_store(store)
-
-        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
-            profiles_current()
-
-        # Verify current profile was shown
-        print_calls = [str(call) for call in mock_console.print.call_args_list]
-        assert any("Current Profile" in call for call in print_calls)
-        assert any("current@example.com" in call for call in print_calls)
-        assert not any("Environment:" in call for call in print_calls)
 
 
 class TestProfilesCreate:

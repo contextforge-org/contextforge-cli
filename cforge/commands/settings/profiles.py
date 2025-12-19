@@ -171,27 +171,6 @@ def profiles_switch(
         raise typer.Exit(1)
 
 
-def profiles_current() -> None:
-    """Show the currently active profile.
-
-    Displays information about which profile is currently being used by the CLI.
-    """
-    console = get_console()
-
-    try:
-        profile = get_active_profile()
-
-        console.print(f"\n[bold green]Current Profile:[/bold green] [cyan]{profile.name}[/cyan]")
-        console.print(f"[dim]Email:[/dim] {profile.email}")
-        console.print(f"[dim]API URL:[/dim] {profile.api_url}")
-        if profile.metadata and profile.metadata.environment:
-            console.print(f"[dim]Environment:[/dim] {profile.metadata.environment}")
-
-    except Exception as e:
-        console.print(f"[red]Error retrieving current profile: {str(e)}[/red]")
-        raise typer.Exit(1)
-
-
 def profiles_create() -> None:
     """Create a new profile interactively.
 
