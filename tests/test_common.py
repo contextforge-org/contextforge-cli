@@ -722,7 +722,7 @@ class TestMakeAuthenticatedRequest:
                 assert "Authorization" not in call_args[1]["headers"]
                 assert result == {"result": "success"}
 
-    def test_request_with_bearer_token(self, mock_client) -> None:
+    def test_request_with_bearer_token(self, mock_client, mock_settings) -> None:
         """Test successful request with Bearer token."""
         mock_client.reset_mock()
         with mock_client_login(mock_client):

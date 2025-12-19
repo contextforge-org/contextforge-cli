@@ -23,7 +23,14 @@ from cforge.commands.settings.profiles import (
     profiles_list,
     profiles_switch,
 )
-from cforge.profile_utils import AuthProfile, ProfileMetadata, ProfileStore, save_profile_store
+from cforge.profile_utils import (
+    AuthProfile,
+    ProfileMetadata,
+    ProfileStore,
+    save_profile_store,
+    load_profile_store,
+    DEFAULT_PROFILE_ID,
+)
 
 
 class TestProfilesList:
@@ -66,22 +73,31 @@ class TestProfilesList:
         call_args = mock_table.call_args
         profile_data = call_args[0][0]
 
-        # Verify profile data
-        assert len(profile_data) == 2
+        # Verify profile data (should include 2 profiles + virtual default)
+        assert len(profile_data) == 3
         assert any(p["id"] == "profile-1" for p in profile_data)
         assert any(p["id"] == "profile-2" for p in profile_data)
+        assert any(p["id"] == DEFAULT_PROFILE_ID for p in profile_data)
         assert any(p["active"] == "✓" for p in profile_data)
 
         # Verify active profile message
         assert any("Currently using profile" in str(call) for call in mock_console.print.call_args_list)
 
     def test_profiles_list_empty(self, mock_console, mock_settings) -> None:
-        """Test listing when no profiles exist."""
+        """Test listing when no profiles exist (should show virtual default)."""
         with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
-            profiles_list()
+            with patch("cforge.commands.settings.profiles.print_table") as mock_table:
+                profiles_list()
 
-        # Verify message about no profiles
-        assert any("No profiles found" in str(call) for call in mock_console.print.call_args_list)
+        # Verify table was printed with virtual default
+        mock_table.assert_called_once()
+        call_args = mock_table.call_args
+        profile_data = call_args[0][0]
+
+        # Should have exactly 1 profile (the virtual default)
+        assert len(profile_data) == 1
+        assert profile_data[0]["id"] == DEFAULT_PROFILE_ID
+        assert profile_data[0]["name"] == "Local Default"
 
     def test_profiles_list_with_active_profile(self, mock_console, mock_settings) -> None:
         """Test listing profiles when there is an active profile."""
@@ -151,10 +167,10 @@ class TestProfilesList:
             with patch("cforge.commands.settings.profiles.print_table"):
                 profiles_list()
 
-        # Verify active profile message is shown
+        # Verify active profile message shows default
         print_calls = [str(call) for call in mock_console.print.call_args_list]
-        assert not any("Currently using profile" in call for call in print_calls)
-        assert not any("Active Profile" in call for call in print_calls)
+        assert any("Currently using profile" in call for call in print_calls)
+        assert any("Local Default" in call for call in print_calls)
 
     def test_profiles_list_error(self, mock_console, mock_settings) -> None:
         """Test listing profiles with an error."""
@@ -226,23 +242,68 @@ class TestProfilesGet:
         print_calls = [str(call) for call in mock_console.print.call_args_list]
         assert any("Active Profile" in call for call in print_calls)
 
+    def test_profiles_get_default(self, mock_console, mock_settings) -> None:
+        """Test getting the virtual default profile."""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_get(profile_id=DEFAULT_PROFILE_ID, json_output=False)
+
+        # Verify default profile was shown
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Local Default" in call for call in print_calls)
+        assert any("admin@localhost" in call for call in print_calls)
+
     def test_profiles_get_not_found(self, mock_console, mock_settings) -> None:
         """Test getting a profile that doesn't exist."""
         with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
-            with pytest.raises(typer.Exit) as exc_info:
+            with pytest.raises(typer.Exit):
                 profiles_get(profile_id="nonexistent", json_output=False)
 
-        assert exc_info.value.exit_code == 1
-        assert any("Profile not found" in str(call) for call in mock_console.print.call_args_list)
+    def test_profiles_get_active_when_none_exists(self, mock_console, mock_settings) -> None:
+        """Test getting active profile when profile_id is None and no profile is active (edge case)."""
+        # Create a profile store with a profile but no active profile
+        profile = AuthProfile(
+            id="profile-1",
+            name="Inactive Profile",
+            email="inactive@example.com",
+            apiUrl="https://api.example.com",
+            isActive=False,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile},
+            activeProfileId=None,
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            # Should not raise an error, should return virtual default
+            profiles_get(profile_id=None, json_output=False)
+
+        # Should show the virtual default profile
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Local Default" in call for call in print_calls)
 
     def test_profiles_get_no_active(self, mock_console, mock_settings) -> None:
-        """Test getting active profile when none is set."""
+        """Test getting active profile when none is set (should return default)."""
         with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
-            with pytest.raises(typer.Exit) as exc_info:
-                profiles_get(profile_id=None, json_output=False)
+            profiles_get(profile_id=None, json_output=False)
 
-        assert exc_info.value.exit_code == 1
-        assert any("No active profile" in str(call) for call in mock_console.print.call_args_list)
+        # Should show the virtual default profile
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Default local development profile" in call for call in print_calls)
+
+    def test_profiles_get_no_active_no_profiles(self, mock_console, mock_settings) -> None:
+        """Test getting active profile when no profiles exist and none active (returns default)."""
+        # Don't create any profile store - should return virtual default
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            profiles_get(profile_id=None, json_output=False)
+
+        # Should show the virtual default profile
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Local Default" in call for call in print_calls)
+
+        assert any("Local Default" in call for call in print_calls)
 
     def test_profiles_get_json_output(self, mock_console, mock_settings) -> None:
         """Test getting profile with JSON output."""
@@ -381,6 +442,39 @@ class TestProfilesSwitch:
         # Verify cache was cleared
         mock_get_settings.cache_clear.assert_called_once()
 
+    def test_profiles_switch_to_default(self, mock_console, mock_settings) -> None:
+        """Test switching to the virtual default profile."""
+        profile1 = AuthProfile(
+            id="profile-1",
+            name="Profile 1",
+            email="user1@example.com",
+            apiUrl="https://api1.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+
+        store = ProfileStore(
+            profiles={"profile-1": profile1},
+            activeProfileId="profile-1",
+        )
+        save_profile_store(store)
+
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.get_settings") as mock_get_settings:
+                mock_get_settings.cache_clear = Mock()
+                profiles_switch(profile_id=DEFAULT_PROFILE_ID)
+
+        # Verify success message
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Switched to profile" in call for call in print_calls)
+        assert any("Local Default" in call for call in print_calls)
+
+        # Verify all profiles are now inactive
+        updated_store = load_profile_store()
+        assert updated_store is not None
+        assert updated_store.active_profile_id is None
+        assert all(not p.is_active for p in updated_store.profiles.values())
+
     def test_profiles_switch_not_found(self, mock_console, mock_settings) -> None:
         """Test switching to a profile that doesn't exist."""
         with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
@@ -472,12 +566,13 @@ class TestProfilesCurrent:
         assert any("production" in call for call in print_calls)
 
     def test_profiles_current_none_set(self, mock_console, mock_settings) -> None:
-        """Test showing current profile when none is set."""
+        """Test showing current profile when none is set (should show default)."""
         with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
             profiles_current()
 
-        # Verify message about no active profile
-        assert any("No active profile" in str(call) for call in mock_console.print.call_args_list)
+        # Should show the virtual default profile
+        print_calls = [str(call) for call in mock_console.print.call_args_list]
+        assert any("Local Default" in call for call in print_calls)
 
     def test_profiles_current_with_environment(self, mock_console, mock_settings) -> None:
         """Test showing current profile with environment metadata."""

@@ -15,6 +15,7 @@ from pathlib import Path
 # First-Party
 from cforge.profile_utils import (
     AuthProfile,
+    DEFAULT_PROFILE_ID,
     ProfileMetadata,
     ProfileStore,
     get_all_profiles,
@@ -389,7 +390,7 @@ class TestGetAllProfiles:
     """Tests for getting all profiles."""
 
     def test_get_all_profiles_success(self, mock_settings) -> None:
-        """Test getting all profiles."""
+        """Test getting all profiles (includes virtual default)."""
         # Create test profiles
         profile1 = AuthProfile(
             id="profile-1",
@@ -416,15 +417,20 @@ class TestGetAllProfiles:
 
         profiles = get_all_profiles()
 
-        assert len(profiles) == 2
+        # Should include 2 profiles + virtual default
+        assert len(profiles) == 3
         assert any(p.id == "profile-1" for p in profiles)
         assert any(p.id == "profile-2" for p in profiles)
+        assert any(p.id == DEFAULT_PROFILE_ID for p in profiles)
 
     def test_get_all_profiles_empty(self, mock_settings) -> None:
-        """Test getting profiles when none exist."""
+        """Test getting profiles when none exist (returns virtual default)."""
         profiles = get_all_profiles()
 
-        assert len(profiles) == 0
+        # Should return only the virtual default profile
+        assert len(profiles) == 1
+        assert profiles[0].id == DEFAULT_PROFILE_ID
+        assert profiles[0].name == "Local Default"
 
 
 class TestGetProfile:
@@ -501,7 +507,7 @@ class TestGetActiveProfile:
         assert result.is_active is True
 
     def test_get_active_profile_none_set(self, mock_settings) -> None:
-        """Test getting active profile when none is set."""
+        """Test getting active profile when none is set (returns virtual default)."""
         profile = AuthProfile(
             id="profile-1",
             name="Profile 1",
@@ -519,13 +525,21 @@ class TestGetActiveProfile:
 
         result = get_active_profile()
 
-        assert result is None
+        # Should return virtual default profile
+        assert result is not None
+        assert result.id == DEFAULT_PROFILE_ID
+        assert result.name == "Local Default"
+        assert result.is_active is True
 
     def test_get_active_profile_no_store(self, mock_settings) -> None:
-        """Test getting active profile when store doesn't exist."""
+        """Test getting active profile when store doesn't exist (returns virtual default)."""
         result = get_active_profile()
 
-        assert result is None
+        # Should return virtual default profile
+        assert result is not None
+        assert result.id == DEFAULT_PROFILE_ID
+        assert result.name == "Local Default"
+        assert result.is_active is True
 
 
 class TestSetActiveProfile:
@@ -623,3 +637,9 @@ class TestSetActiveProfile:
         updated_store = load_profile_store()
         assert updated_store is not None
         assert updated_store.profiles["profile-1"].last_used is not None
+
+    def test_set_active_profile_default_no_store(self, mock_settings) -> None:
+        """Test setting active profile to the default with no store passes"""
+        result = set_active_profile(DEFAULT_PROFILE_ID)
+
+        assert result is True
