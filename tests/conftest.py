@@ -53,7 +53,7 @@ logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
 def patch_everywhere(name: str, **kwargs) -> Generator[List[Any], None, None]:
     """Patch a function in every place it is imported."""
     # Find all modules that have the function
-    mod_names = [m for m, mod in sys.modules.items() if m.startswith("cforge") and hasattr(mod, name)]
+    mod_names = [m for m, mod in sys.modules.items() if ((m.startswith("cforge") or (m.startswith("test") and "conftest" in m)) and hasattr(mod, name))]
     patches = [patch(f"{m}.{name}", **kwargs) for m in mod_names]
     yields = [p.__enter__() for p in patches]
     try:
