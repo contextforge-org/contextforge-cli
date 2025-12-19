@@ -218,8 +218,8 @@ def get_active_profile() -> AuthProfile:
     """
     if (store := load_profile_store()) and store.active_profile_id:
         profile = store.profiles.get(store.active_profile_id)
-        if not profile:
-            raise ValueError("BAD STATE: Profile store active profile id not found in profiles")
+        # This should be unreachable due to validation on loading
+        assert profile, "BAD STATE: Profile store active profile id not found in profiles"
         return profile
 
     # Check if Desktop app has created a default profile
