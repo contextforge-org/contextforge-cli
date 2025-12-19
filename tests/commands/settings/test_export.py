@@ -24,7 +24,7 @@ from cforge.commands.settings.export import export
 class TestExportCommand:
     """Tests for export command."""
 
-    def test_export_with_custom_output(self, mock_settings, mock_console) -> None:
+    def test_export_with_custom_output(self, mock_base_url, mock_console) -> None:
         """Test export with custom output file."""
         mock_export_data = {
             "version": "1.0",
@@ -36,7 +36,7 @@ class TestExportCommand:
             output_file = Path(temp_dir) / "export.json"
 
             with patch("cforge.commands.settings.export.get_console", return_value=mock_console):
-                with patch("cforge.commands.settings.export.get_settings", return_value=mock_settings):
+                with patch("cforge.commands.settings.export.get_base_url", return_value=mock_base_url):
                     with patch("cforge.commands.settings.export.make_authenticated_request", return_value=mock_export_data):
                         export(output=output_file, types=None, exclude_types=None, tags=None, include_inactive=False, no_dependencies=False, verbose=False)
 
@@ -46,7 +46,7 @@ class TestExportCommand:
             assert data["version"] == "1.0"
             assert data["metadata"]["entity_counts"]["tools"] == 5
 
-    def test_export_with_default_filename(self, mock_settings, mock_console) -> None:
+    def test_export_with_default_filename(self, mock_base_url, mock_console) -> None:
         """Test export with auto-generated filename."""
         mock_export_data = {"metadata": {"entity_counts": {}}}
         import os
@@ -56,7 +56,7 @@ class TestExportCommand:
             try:
                 os.chdir(temp_dir)
                 with patch("cforge.commands.settings.export.get_console", return_value=mock_console):
-                    with patch("cforge.commands.settings.export.get_settings", return_value=mock_settings):
+                    with patch("cforge.commands.settings.export.get_base_url", return_value=mock_base_url):
                         with patch("cforge.commands.settings.export.make_authenticated_request", return_value=mock_export_data):
                             export(output=None, types=None, exclude_types=None, tags=None, include_inactive=False, no_dependencies=False, verbose=False)
 
@@ -66,7 +66,7 @@ class TestExportCommand:
             finally:
                 os.chdir(orig_dir)
 
-    def test_export_with_filters(self, mock_settings, mock_console) -> None:
+    def test_export_with_filters(self, mock_base_url, mock_console) -> None:
         """Test export with filter parameters."""
         mock_export_data = {"metadata": {"entity_counts": {}}}
 
@@ -74,7 +74,7 @@ class TestExportCommand:
             output_file = Path(temp_dir) / "export.json"
 
             with patch("cforge.commands.settings.export.get_console", return_value=mock_console):
-                with patch("cforge.commands.settings.export.get_settings", return_value=mock_settings):
+                with patch("cforge.commands.settings.export.get_base_url", return_value=mock_base_url):
                     with patch("cforge.commands.settings.export.make_authenticated_request", return_value=mock_export_data) as mock_request:
                         export(
                             output=output_file,
@@ -95,7 +95,7 @@ class TestExportCommand:
                     assert params["include_inactive"] == "true"
                     assert params["include_dependencies"] == "false"
 
-    def test_export_verbose_mode(self, mock_settings, mock_console) -> None:
+    def test_export_verbose_mode(self, mock_base_url, mock_console) -> None:
         """Test export with verbose output."""
         mock_export_data = {
             "version": "1.0",
@@ -109,7 +109,7 @@ class TestExportCommand:
             output_file = Path(temp_dir) / "export.json"
 
             with patch("cforge.commands.settings.export.get_console", return_value=mock_console):
-                with patch("cforge.commands.settings.export.get_settings", return_value=mock_settings):
+                with patch("cforge.commands.settings.export.get_base_url", return_value=mock_base_url):
                     with patch("cforge.commands.settings.export.make_authenticated_request", return_value=mock_export_data):
                         export(output=output_file, types=None, exclude_types=None, tags=None, include_inactive=False, no_dependencies=False, verbose=True)
 
@@ -117,7 +117,7 @@ class TestExportCommand:
             assert any("Export details" in str(call) for call in mock_console.print.call_args_list)
             assert any("Version:" in str(call) for call in mock_console.print.call_args_list)
 
-    def test_export_with_entity_counts(self, mock_settings, mock_console) -> None:
+    def test_export_with_entity_counts(self, mock_base_url, mock_console) -> None:
         """Test export with non-zero entity counts."""
         mock_export_data = {"metadata": {"entity_counts": {"tools": 5, "prompts": 3, "servers": 0}}}
 
@@ -125,7 +125,7 @@ class TestExportCommand:
             output_file = Path(temp_dir) / "export.json"
 
             with patch("cforge.commands.settings.export.get_console", return_value=mock_console):
-                with patch("cforge.commands.settings.export.get_settings", return_value=mock_settings):
+                with patch("cforge.commands.settings.export.get_base_url", return_value=mock_base_url):
                     with patch("cforge.commands.settings.export.make_authenticated_request", return_value=mock_export_data):
                         export(output=output_file, types=None, exclude_types=None, tags=None, include_inactive=False, no_dependencies=False, verbose=False)
 
@@ -135,10 +135,10 @@ class TestExportCommand:
             assert "prompts: 3" in output_str
             # servers: 0 should not be printed (covered by if count > 0)
 
-    def test_export_error_handling(self, mock_settings, mock_console) -> None:
+    def test_export_error_handling(self, mock_base_url, mock_console) -> None:
         """Test export error handling."""
         with patch("cforge.commands.settings.export.get_console", return_value=mock_console):
-            with patch("cforge.commands.settings.export.get_settings", return_value=mock_settings):
+            with patch("cforge.commands.settings.export.get_base_url", return_value=mock_base_url):
                 with patch("cforge.commands.settings.export.make_authenticated_request", side_effect=Exception("Export failed")):
                     with pytest.raises(typer.Exit) as exc_info:
                         export(output=None, types=None, exclude_types=None, tags=None, include_inactive=False, no_dependencies=False, verbose=False)

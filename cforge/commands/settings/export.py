@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 import typer
 
 # First-Party
-from cforge.common import get_console, get_settings, make_authenticated_request
+from cforge.common import get_base_url, get_console, make_authenticated_request
 
 
 def export(
@@ -33,7 +33,7 @@ def export(
     console = get_console()
 
     try:
-        console.print(f"[cyan]Exporting configuration from gateway at http://{get_settings().host}:{get_settings().port}[/cyan]")
+        console.print(f"[cyan]Exporting configuration from gateway at {get_base_url()}[/cyan]")
 
         # Build API parameters
         params: Dict[str, Any] = {}

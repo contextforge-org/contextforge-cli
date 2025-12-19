@@ -12,7 +12,7 @@ import requests
 import typer
 
 # First-Party
-from cforge.common import get_console, get_settings, get_token_file, save_token
+from cforge.common import get_base_url, get_console, get_token_file, save_token
 
 
 def login(
@@ -28,7 +28,7 @@ def login(
 
     try:
         # Make login request
-        gateway_url = f"http://{get_settings().host}:{get_settings().port}"
+        gateway_url = get_base_url()
         full_url = f"{gateway_url}/auth/login"
 
         response = requests.post(full_url, json={"email": email, "password": password})

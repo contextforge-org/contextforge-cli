@@ -85,3 +85,81 @@ class TestLogoutCommandIntegration:
             # Try again (should fail)
             with pytest.raises(AuthenticationError):
                 make_authenticated_request("GET", "/tools")
+
+
+class TestLogoutWithProfiles:
+    """Tests for logout command with profile support."""
+
+    def test_logout_removes_profile_specific_token(self, mock_console, mock_settings) -> None:
+        """Test that logout removes profile-specific token file."""
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
+        from datetime import datetime
+
+        # Create and save an active profile
+        profile_id = "test-profile-logout"
+        profile = AuthProfile(
+            id=profile_id,
+            name="Test Profile",
+            email="test@example.com",
+            apiUrl="https://api.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        store = ProfileStore(
+            profiles={profile_id: profile},
+            activeProfileId=profile_id,
+        )
+        save_profile_store(store)
+
+        token_file = mock_settings.contextforge_home / f"token.{profile_id}"
+        token_file.write_text("profile_token")
+
+        with patch("cforge.commands.settings.logout.get_console", return_value=mock_console):
+            logout()
+
+        # Token file should be deleted
+        assert not token_file.exists()
+
+        # Verify console output mentions the profile-specific file
+        assert mock_console.print.call_count == 2
+        first_call = mock_console.print.call_args_list[0][0][0]
+        assert "Token removed" in first_call
+        assert profile_id in str(token_file)
+
+    def test_logout_only_removes_active_profile_token(self, mock_console, mock_settings) -> None:
+        """Test that logout only removes the active profile's token, not others."""
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
+        from datetime import datetime
+
+        profile_id1 = "profile-1"
+        profile_id2 = "profile-2"
+
+        # Create profile 2 as active
+        profile2 = AuthProfile(
+            id=profile_id2,
+            name="Profile 2",
+            email="user2@example.com",
+            apiUrl="https://api2.example.com",
+            isActive=True,
+            createdAt=datetime.now(),
+        )
+        store = ProfileStore(
+            profiles={profile_id2: profile2},
+            activeProfileId=profile_id2,
+        )
+        save_profile_store(store)
+
+        token_file1 = mock_settings.contextforge_home / f"token.{profile_id1}"
+        token_file2 = mock_settings.contextforge_home / f"token.{profile_id2}"
+
+        # Create both token files
+        token_file1.write_text("token_profile_1")
+        token_file2.write_text("token_profile_2")
+
+        with patch("cforge.commands.settings.logout.get_console", return_value=mock_console):
+            logout()
+
+        # Only profile 2's token should be deleted (the active one)
+        assert token_file1.exists()  # Profile 1's token still exists
+        assert not token_file2.exists()  # Profile 2's token was deleted
+        assert token_file1.read_text() == "token_profile_1"

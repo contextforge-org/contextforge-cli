@@ -26,7 +26,10 @@ import requests
 import typer
 
 # First-Party
+from cforge.profile_utils import DEFAULT_PROFILE_ID
 from cforge.config import get_settings
+from cforge.credential_store import load_profile_credentials
+from cforge.profile_utils import get_active_profile
 
 # ------------------------------------------------------------------------------
 # Singletons
@@ -96,14 +99,29 @@ def handle_exception(exception: Exception) -> None:
 # ------------------------------------------------------------------------------
 
 
+def get_base_url() -> str:
+    """Get the full base URL for the current profile's server
+
+    TODO: This will need to support https in the future!
+
+    Returns:
+        The string URL base
+    """
+    return get_active_profile().api_url
+
+
 def get_token_file() -> Path:
     """Get the path to the token file in contextforge_home.
 
+    Uses the active profile if available, otherwise returns the default token file.
+    For the virtual default profile, uses the unsuffixed token file.
+
     Returns:
-        Path to the token file
+        Path to the token file (profile-specific or default)
     """
-    token_file = get_settings().contextforge_home / "token"
-    return token_file
+    profile = get_active_profile()
+    suffix = "" if profile.id == DEFAULT_PROFILE_ID else f".{profile.id}"
+    return get_settings().contextforge_home / f"token{suffix}"
 
 
 def save_token(token: str) -> None:
@@ -131,13 +149,52 @@ def load_token() -> Optional[str]:
     return None
 
 
+def attempt_auto_login() -> Optional[str]:
+    """Attempt to automatically login using stored credentials.
+
+    This function tries to login using credentials stored by the desktop app
+    in the encrypted credential store. If successful, it saves the token
+    and returns it.
+
+    Returns:
+        Authentication token if auto-login succeeds, None otherwise
+    """
+    # Try to load credentials from the encrypted store
+    profile = get_active_profile()
+    credentials = load_profile_credentials(profile.id)
+    if not credentials or not credentials.get("email") or not credentials.get("password"):
+        return None
+
+    # Attempt login
+    try:
+        gateway_url = get_base_url()
+        response = requests.post(
+            f"{gateway_url}/auth/email/login",
+            json={"email": credentials["email"], "password": credentials["password"]},
+            headers={"Content-Type": "application/json"},
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            token = data.get("access_token")
+            if token:
+                # Save the token for future use
+                save_token(token)
+                return token
+    except Exception:
+        # Silently fail - auto-login is best-effort
+        pass
+
+    return None
+
+
 def get_auth_token() -> Optional[str]:
     """Get authentication token from multiple sources in priority order.
 
     Priority:
     1. MCPGATEWAY_BEARER_TOKEN environment variable
     2. Stored token in contextforge_home/token file
-    3. Basic auth from settings
+    3. Auto-login using stored credentials (if available)
 
     Returns:
         Authentication token string or None if not configured
@@ -149,6 +206,11 @@ def get_auth_token() -> Optional[str]:
 
     # Try stored token file
     token = load_token()
+    if token:
+        return token
+
+    # Try auto-login with stored credentials
+    token = attempt_auto_login()
     if token:
         return token
 
@@ -190,7 +252,7 @@ def make_authenticated_request(
         else:
             headers["Authorization"] = f"Bearer {token}"
 
-    gateway_url = f"http://{get_settings().host}:{get_settings().port}"
+    gateway_url = get_base_url()
     full_url = f"{gateway_url}{url}"
 
     try:

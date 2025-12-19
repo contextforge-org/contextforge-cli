@@ -50,8 +50,7 @@ def prompts_list(
                 print_table(
                     prompts,
                     "Prompts",
-                    ["id", "name", "description", "arguments", "isActive"],
-                    {"isActive": "enabled"},
+                    ["id", "name", "description", "arguments", "enabled"],
                 )
             else:
                 console.print("[yellow]No prompts found[/yellow]")
