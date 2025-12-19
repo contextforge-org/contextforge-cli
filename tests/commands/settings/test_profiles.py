@@ -688,3 +688,11 @@ class TestProfilesCreate:
         assert profile.email == data_file_content["email"]
         assert profile.api_url == data_file_content["api_url"]
         assert profile.is_active == data_file_content["is_active"]
+
+    def test_profiles_create_bad_data_file(self, mock_console, mock_settings) -> None:
+        """Test error handling when data file is not found"""
+        with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
+            with patch("cforge.commands.settings.profiles.typer.confirm", return_value=False):
+                with pytest.raises(typer.Exit) as exc_info:
+                    profiles_create(mock_settings.contextforge_home / "does" / "not" / "exist")
+                assert exc_info.value.exit_code == 1
