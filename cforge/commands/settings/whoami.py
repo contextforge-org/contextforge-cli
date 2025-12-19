@@ -25,15 +25,14 @@ def whoami() -> None:
     active_profile = get_active_profile()
 
     # Display active profile information if available
-    if active_profile:
-        console.print("[bold cyan]Active Profile:[/bold cyan]")
-        console.print(f"  [cyan]Name:[/cyan] {active_profile.name}")
-        console.print(f"  [cyan]ID:[/cyan] {active_profile.id}")
-        console.print(f"  [cyan]Email:[/cyan] {active_profile.email}")
-        console.print(f"  [cyan]API URL:[/cyan] {active_profile.api_url}")
-        if active_profile.metadata and active_profile.metadata.environment:
-            console.print(f"  [cyan]Environment:[/cyan] {active_profile.metadata.environment}")
-        console.print()
+    console.print("[bold cyan]Active Profile:[/bold cyan]")
+    console.print(f"  [cyan]Name:[/cyan] {active_profile.name}")
+    console.print(f"  [cyan]ID:[/cyan] {active_profile.id}")
+    console.print(f"  [cyan]Email:[/cyan] {active_profile.email}")
+    console.print(f"  [cyan]API URL:[/cyan] {active_profile.api_url}")
+    if active_profile.metadata and active_profile.metadata.environment:
+        console.print(f"  [cyan]Environment:[/cyan] {active_profile.metadata.environment}")
+    console.print()
 
     # Display authentication status
     if env_token:
