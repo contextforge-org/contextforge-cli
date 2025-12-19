@@ -210,15 +210,17 @@ def get_profile(profile_id: str) -> Optional[AuthProfile]:
         return store.profiles.get(profile_id)
 
 
-def get_active_profile() -> Optional[AuthProfile]:
+def get_active_profile() -> AuthProfile:
     """Get the currently active profile, including the virtual default profile.
 
     Returns:
-        AuthProfile if an active profile is set, or the virtual default profile
-        if no Desktop default exists
+        AuthProfile if an active profile is set, or default (virtual or desktop)
     """
     if (store := load_profile_store()) and store.active_profile_id:
-        return store.profiles.get(store.active_profile_id)
+        profile = store.profiles.get(store.active_profile_id)
+        if not profile:
+            raise ValueError("BAD STATE: Profile store active profile id not found in profiles")
+        return profile
 
     # Check if Desktop app has created a default profile
     expected_default_url = get_default_api_url()
@@ -226,8 +228,8 @@ def get_active_profile() -> Optional[AuthProfile]:
     if store:
         for profile in store.profiles.values():
             if profile.api_url == expected_default_url and profile.metadata and profile.metadata.is_internal:
-                # Desktop default exists, return None (no active profile)
-                return None
+                # If Desktop default exists, use that
+                return profile
 
     # Return virtual default profile if no Desktop default exists
     return AuthProfile(

@@ -25,22 +25,11 @@ class TestWhoamiCommand:
         with patch("cforge.commands.settings.whoami.get_console", return_value=mock_console):
             with patch("cforge.commands.settings.whoami.get_settings", return_value=mock_settings):
                 with patch("cforge.commands.settings.whoami.load_token", return_value=None):
-                    with patch("cforge.commands.settings.whoami.get_active_profile", return_value=None):
-                        whoami()
+                    whoami()
 
-        # Verify console output
-        assert mock_console.print.call_count == 2
-
-        # Check first call - authentication status
-        first_call = mock_console.print.call_args_list[0][0][0]
-        assert "Authenticated via MCPGATEWAY_BEARER_TOKEN" in first_call
-        assert "[green]" in first_call
-
-        # Check second call - token preview
-        second_call = mock_console.print.call_args_list[1][0][0]
-        assert "Token:" in second_call
-        assert "env_token_" in second_call
-        assert "..." in second_call
+        call_messages = [call[0][0] for call in mock_console.print.call_args_list if call and call[0]]
+        assert any("Authenticated via MCPGATEWAY_BEARER_TOKEN" in call for call in call_messages)
+        assert any("env_token_" in call for call in call_messages)
 
     def test_whoami_with_stored_token(self, mock_settings, mock_console) -> None:
         """Test whoami when authenticated via stored token file."""
@@ -50,22 +39,11 @@ class TestWhoamiCommand:
         with patch("cforge.commands.settings.whoami.get_console", return_value=mock_console):
             with patch("cforge.commands.settings.whoami.get_settings", return_value=mock_settings):
                 with patch("cforge.commands.settings.whoami.load_token", return_value=stored_token):
-                    with patch("cforge.commands.settings.whoami.get_active_profile", return_value=None):
-                        whoami()
+                    whoami()
 
-        # Verify console output
-        assert mock_console.print.call_count == 2
-
-        # Check first call - authentication status with file path
-        first_call = mock_console.print.call_args_list[0][0][0]
-        assert "Authenticated via stored token" in first_call
-        assert "[green]" in first_call
-
-        # Check second call - token preview
-        second_call = mock_console.print.call_args_list[1][0][0]
-        assert "Token:" in second_call
-        assert "stored_tok" in second_call
-        assert "..." in second_call
+        call_messages = [call[0][0] for call in mock_console.print.call_args_list if call and call[0]]
+        assert any("Authenticated via stored token" in call for call in call_messages)
+        assert any("stored_tok" in call for call in call_messages)
 
     def test_whoami_not_authenticated(self, mock_settings, mock_console) -> None:
         """Test whoami when not authenticated."""
@@ -75,17 +53,11 @@ class TestWhoamiCommand:
         with patch("cforge.commands.settings.whoami.get_console", return_value=mock_console):
             with patch("cforge.commands.settings.whoami.get_settings", return_value=mock_settings):
                 with patch("cforge.commands.settings.whoami.load_token", return_value=None):
-                    with patch("cforge.commands.settings.whoami.get_active_profile", return_value=None):
-                        whoami()
+                    whoami()
 
-        # Verify console output
-        mock_console.print.assert_called_once()
-
-        # Check output message
-        call_args = mock_console.print.call_args[0][0]
-        assert "Not authenticated" in call_args
-        assert "cforge login" in call_args
-        assert "[yellow]" in call_args
+        call_messages = [call[0][0] for call in mock_console.print.call_args_list if call and call[0]]
+        assert any("Not authenticated" in call for call in call_messages)
+        assert any("cforge login" in call for call in call_messages)
 
     def test_whoami_env_token_takes_precedence(self, mock_settings, mock_console) -> None:
         """Test that env token takes precedence over stored token."""
@@ -96,13 +68,11 @@ class TestWhoamiCommand:
         with patch("cforge.commands.settings.whoami.get_console", return_value=mock_console):
             with patch("cforge.commands.settings.whoami.get_settings", return_value=mock_settings):
                 with patch("cforge.commands.settings.whoami.load_token", return_value=stored_token):
-                    with patch("cforge.commands.settings.whoami.get_active_profile", return_value=None):
-                        whoami()
+                    whoami()
 
-        # Should show env token, not stored token
-        first_call = mock_console.print.call_args_list[0][0][0]
-        assert "MCPGATEWAY_BEARER_TOKEN" in first_call
-        assert "stored token" not in first_call
+        call_messages = [call[0][0] for call in mock_console.print.call_args_list if call and call[0]]
+        assert any("MCPGATEWAY_BEARER_TOKEN" in call for call in call_messages)
+        assert not any("stored token" in call for call in call_messages)
 
 
 class TestWhoamiWithProfiles:

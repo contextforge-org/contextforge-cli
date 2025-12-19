@@ -552,7 +552,7 @@ class TestProfilesCreate:
                         "created_at": datetime.now(),
                     }
 
-                    profiles_create()
+                    profiles_create(None)
 
         # Verify success message
         print_calls = [str(call) for call in mock_console.print.call_args_list]
@@ -578,7 +578,7 @@ class TestProfilesCreate:
                                 "created_at": datetime.now(),
                             }
 
-                            profiles_create()
+                            profiles_create(None)
 
         # Verify success and enable messages
         print_calls = [str(call) for call in mock_console.print.call_args_list]
@@ -591,7 +591,7 @@ class TestProfilesCreate:
         with patch("cforge.commands.settings.profiles.get_console", return_value=mock_console):
             with patch("cforge.commands.settings.profiles.prompt_for_schema", side_effect=Exception("Test error")):
                 with pytest.raises(typer.Exit) as exc_info:
-                    profiles_create()
+                    profiles_create(None)
 
         assert exc_info.value.exit_code == 1
         assert any("Error creating profile" in str(call) for call in mock_console.print.call_args_list)
@@ -612,7 +612,7 @@ class TestProfilesCreate:
                             "created_at": datetime.now(),
                         }
 
-                        profiles_create()
+                        profiles_create(None)
 
         # Verify failure message
         print_calls = [str(call) for call in mock_console.print.call_args_list]
@@ -650,7 +650,7 @@ class TestProfilesCreate:
                         "created_at": datetime.now(),
                     }
 
-                    profiles_create()
+                    profiles_create(None)
 
         # Verify both profiles exist in the store
         updated_store = load_profile_store()

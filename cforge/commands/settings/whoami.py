@@ -18,13 +18,14 @@ def whoami() -> None:
     Displays where the authentication token is coming from (if any) and
     information about the active profile if one is set.
     """
+
     console = get_console()
     settings = get_settings()
     env_token = settings.mcpgateway_bearer_token
     stored_token = load_token()
     active_profile = get_active_profile()
 
-    # Display active profile information if available
+    # Display active profile information
     console.print("[bold cyan]Active Profile:[/bold cyan]")
     console.print(f"  [cyan]Name:[/cyan] {active_profile.name}")
     console.print(f"  [cyan]ID:[/cyan] {active_profile.id}")

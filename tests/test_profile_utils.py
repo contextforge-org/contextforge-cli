@@ -699,7 +699,7 @@ class TestDesktopDefaultProfile:
         assert any(p.id == DEFAULT_PROFILE_ID for p in profiles)
 
     def test_get_active_profile_with_desktop_default_inactive(self, mock_settings) -> None:
-        """Test that None is returned when Desktop default exists but is not active."""
+        """Test that the desktop default is returned when Desktop default exists but is not active."""
         # Create a Desktop-created default profile that is NOT active
         desktop_default = AuthProfile(
             id="random-desktop-id",
@@ -724,7 +724,7 @@ class TestDesktopDefaultProfile:
         result = get_active_profile()
 
         # Should return None because Desktop default exists (even if not active)
-        assert result is None
+        assert result == desktop_default
 
     def test_get_active_profile_without_desktop_default(self, mock_settings) -> None:
         """Test that virtual default is returned when no Desktop default exists."""
