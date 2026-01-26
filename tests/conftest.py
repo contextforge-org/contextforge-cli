@@ -8,6 +8,7 @@ Pytest configuration and shared fixtures for Context Forge CLI tests.
 """
 
 # Standard
+import inspect
 import logging
 import os
 import socket
@@ -28,6 +29,7 @@ import uvicorn
 from fastapi.testclient import TestClient
 from mcp.server.fastmcp import FastMCP
 from pydantic import SecretStr
+from typer.models import OptionInfo
 from typer.testing import CliRunner
 
 
@@ -311,6 +313,44 @@ def registered_mcp_server(mock_mcp_server, authorized_mock_client) -> Generator[
     """Test-level fixture to register the mock server and unregister at the end"""
     with register_mcp_server(mock_mcp_server, authorized_mock_client) as mcp_server:
         yield mcp_server
+
+
+def invoke_typer_command(func: Callable, *args, **kwargs) -> Any:
+    """Invoke a Typer command function with proper default value handling.
+
+    When calling Typer commands directly in tests (not via CLI), parameters that
+    aren't explicitly provided remain as OptionInfo objects instead of being
+    converted to their default values. This helper extracts defaults from OptionInfo
+    objects and calls the function with resolved values.
+
+    Args:
+        func: The Typer command function to invoke
+        *args: Positional arguments to pass to the function
+        **kwargs: Keyword arguments to pass to the function
+
+    Returns:
+        The return value of the function
+
+    Example:
+        # Instead of:
+        run(stdio="cat", port=9000)  # Other params are OptionInfo objects
+
+        # Use:
+        invoke_typer_command(run, stdio="cat", port=9000)  # All params resolved
+    """
+    sig = inspect.signature(func)
+    bound_args = sig.bind_partial(*args, **kwargs)
+    bound_args.apply_defaults()
+
+    # Resolve OptionInfo objects to their default values
+    resolved_args = {}
+    for param_name, param_value in bound_args.arguments.items():
+        if isinstance(param_value, OptionInfo):
+            resolved_args[param_name] = param_value.default
+        else:
+            resolved_args[param_name] = param_value
+
+    return func(**resolved_args)
 
 
 @pytest.fixture
