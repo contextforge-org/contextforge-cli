@@ -12,26 +12,13 @@ interface for running and exposing MCP servers.
 """
 
 # Standard
-from typing import Any, List, Optional
+from typing import List, Optional
 
 # Third-Party
 import typer
-from typer.models import OptionInfo
 
 # First-Party
 from mcpgateway.translate import main as translate_main
-
-
-def _get_value(value: Any) -> Any:
-    """Extract the actual value from a Typer OptionInfo object or return as-is.
-
-    When calling Typer commands directly in tests (not via CLI), parameters that
-    aren't explicitly provided remain as OptionInfo objects instead of being
-    converted to their default values. This helper extracts the default value.
-    """
-    if isinstance(value, OptionInfo):
-        return value.default
-    return value
 
 
 def run(
@@ -89,86 +76,63 @@ def run(
     # Build argument list for translate_main
     args = []
 
-    # Extract actual values (handles both CLI and test invocation)
-    stdio_val = _get_value(stdio)
-    grpc_val = _get_value(grpc)
-    expose_sse_val = _get_value(expose_sse)
-    expose_streamable_http_val = _get_value(expose_streamable_http)
-    grpc_tls_val = _get_value(grpc_tls)
-    grpc_cert_val = _get_value(grpc_cert)
-    grpc_key_val = _get_value(grpc_key)
-    grpc_metadata_val = _get_value(grpc_metadata)
-    port_val = _get_value(port)
-    host_val = _get_value(host)
-    log_level_val = _get_value(log_level)
-    cors_val = _get_value(cors)
-    oauth2_bearer_val = _get_value(oauth2_bearer)
-    sse_path_val = _get_value(sse_path)
-    message_path_val = _get_value(message_path)
-    keep_alive_val = _get_value(keep_alive)
-    stdio_command_val = _get_value(stdio_command)
-    enable_dynamic_env_val = _get_value(enable_dynamic_env)
-    header_to_env_val = _get_value(header_to_env)
-    stateless_val = _get_value(stateless)
-    json_response_val = _get_value(json_response)
-
     # Source/destination options (only if provided)
-    if stdio_val is not None:
-        args.extend(["--stdio", stdio_val])
-    if grpc_val is not None:
-        args.extend(["--grpc", grpc_val])
+    if stdio is not None:
+        args.extend(["--stdio", stdio])
+    if grpc is not None:
+        args.extend(["--grpc", grpc])
 
     # Protocol exposure options (only if True)
-    if expose_sse_val:
+    if expose_sse:
         args.append("--expose-sse")
-    if expose_streamable_http_val:
+    if expose_streamable_http:
         args.append("--expose-streamable-http")
 
     # gRPC configuration (only if provided)
-    if grpc_tls_val:
+    if grpc_tls:
         args.append("--grpc-tls")
-    if grpc_cert_val is not None:
-        args.extend(["--grpc-cert", grpc_cert_val])
-    if grpc_key_val is not None:
-        args.extend(["--grpc-key", grpc_key_val])
-    if grpc_metadata_val is not None:
-        for metadata in grpc_metadata_val:
+    if grpc_cert is not None:
+        args.extend(["--grpc-cert", grpc_cert])
+    if grpc_key is not None:
+        args.extend(["--grpc-key", grpc_key])
+    if grpc_metadata is not None:
+        for metadata in grpc_metadata:
             args.extend(["--grpc-metadata", metadata])
 
     # Server configuration (always pass)
-    args.extend(["--port", str(port_val)])
-    args.extend(["--host", host_val])
-    args.extend(["--logLevel", log_level_val])
+    args.extend(["--port", str(port)])
+    args.extend(["--host", host])
+    args.extend(["--logLevel", log_level])
 
     # CORS configuration (only if provided)
-    if cors_val is not None:
+    if cors is not None:
         args.append("--cors")
-        args.extend(cors_val)
+        args.extend(cors)
 
     # Authentication (only if provided)
-    if oauth2_bearer_val is not None:
-        args.extend(["--oauth2Bearer", oauth2_bearer_val])
+    if oauth2_bearer is not None:
+        args.extend(["--oauth2Bearer", oauth2_bearer])
 
     # SSE configuration (always pass)
-    args.extend(["--ssePath", sse_path_val])
-    args.extend(["--messagePath", message_path_val])
-    args.extend(["--keepAlive", str(keep_alive_val)])
+    args.extend(["--ssePath", sse_path])
+    args.extend(["--messagePath", message_path])
+    args.extend(["--keepAlive", str(keep_alive)])
 
     # Stdio command for bridging (only if provided)
-    if stdio_command_val is not None:
-        args.extend(["--stdioCommand", stdio_command_val])
+    if stdio_command is not None:
+        args.extend(["--stdioCommand", stdio_command])
 
     # Dynamic environment injection (only if enabled)
-    if enable_dynamic_env_val:
+    if enable_dynamic_env:
         args.append("--enable-dynamic-env")
-    if header_to_env_val is not None:
-        for mapping in header_to_env_val:
+    if header_to_env is not None:
+        for mapping in header_to_env:
             args.extend(["--header-to-env", mapping])
 
     # Streamable HTTP options (only if True)
-    if stateless_val:
+    if stateless:
         args.append("--stateless")
-    if json_response_val:
+    if json_response:
         args.append("--jsonResponse")
 
     # Call the translate main function with constructed arguments
