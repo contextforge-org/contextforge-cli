@@ -12,13 +12,18 @@ interface for running and exposing MCP servers.
 """
 
 # Standard
+import atexit
+import multiprocessing
+import os
+import time
 from typing import List, Optional
 
 # Third-Party
+import requests
 import typer
 
 # First-Party
-from mcpgateway.translate import main as translate_main
+from cforge.common import get_console, make_authenticated_request
 
 
 def run(
@@ -55,6 +60,11 @@ def run(
     ),
     stateless: bool = typer.Option(False, "--stateless", help="Use stateless mode for streamable HTTP (default: False)"),
     json_response: bool = typer.Option(False, "--json-response", help="Return JSON responses instead of SSE streams for streamable HTTP (default: False)"),
+    register: bool = typer.Option(True, "--register/--no-register", help="Auto-register the server with the configured Context Forge gateway (default: True)"),
+    register_timeout: float = typer.Option(10.0, "--register-timeout", help="Timeout for registration health check (default 10s)"),
+    temporary: bool = typer.Option(False, "--temporary", help="Unregister the server on exit (only applies if --register is enabled)"),
+    server_name: Optional[str] = typer.Option(None, "--server-name", help="Name for the registered server (auto-generated if not provided)"),
+    server_description: Optional[str] = typer.Option(None, "--server-description", help="Description for the registered server"),
 ) -> None:
     """Run MCP servers locally and expose them via SSE or streamable HTTP.
 
@@ -62,17 +72,33 @@ def run(
     HTTP/SSE, and streamable HTTP. It enables exposing local MCP servers over HTTP
     or consuming remote endpoints as local stdio servers.
 
+    By default, the server is automatically registered with the configured Context Forge
+    gateway. Use --no-register to disable this behavior, or --temporary to automatically
+    unregister the server when it exits.
+
     Examples:
 
-        # Expose a local MCP server via SSE
+        # Expose a local MCP server via SSE (auto-registered)
         cforge run --stdio "uvx mcp-server-git" --port 9000
+
+        # Expose without registering with the gateway
+        cforge run --stdio "uvx mcp-server-git" --port 9000 --no-register
+
+        # Expose and auto-cleanup on exit
+        cforge run --stdio "uvx mcp-server-git" --port 9000 --temporary
 
         # Expose via both SSE and streamable HTTP
         cforge run --stdio "uvx mcp-server-git" --expose-sse --expose-streamable-http --port 9000
-
-        # Expose via streamable HTTP with stateless mode
-        cforge run --stdio "uvx mcp-server-git" --expose-streamable-http --stateless --port 9000
     """
+    console = get_console()
+
+    # Handle registration if enabled
+    if register and not temporary:
+        # Validate that we have something to register
+        if not stdio and not grpc:
+            console.print("[yellow]Warning: --register requires either --stdio or --grpc to be specified[/yellow]")
+            register = False
+
     # Build argument list for translate_main
     args = []
 
@@ -135,5 +161,89 @@ def run(
     if json_response:
         args.append("--jsonResponse")
 
-    # Call the translate main function with constructed arguments
-    translate_main(args)
+    # Import top-level translate here to avoid undesirable initialization
+    # Third Party
+    from mcpgateway.translate import main as translate_main
+
+    # Launch the translation wrapper in a subprocess
+    proc = multiprocessing.Process(target=translate_main, args=(args,))
+    proc.start()
+
+    # Register if requested
+    if register:
+
+        # Default to SSE if no protocol specified
+        is_sse = expose_sse or expose_streamable_http or (not expose_sse and not expose_streamable_http)
+
+        registered_server_id: Optional[str] = None
+        try:
+            # Wait for the server to come up
+            server_url_base = f"http://{host}:{port}"
+            start_time = time.time()
+            while time.time() - start_time <= register_timeout:
+                try:
+                    res = requests.get(f"{server_url_base}/healthz", timeout=0.1)
+                    if res.status_code == 200:
+                        break
+                except requests.exceptions.ConnectionError:
+                    time.sleep(0.5)
+
+            # Build the server URL based on the protocol
+            server_url = f"{server_url_base}{sse_path}" if is_sse else f"{server_url_base}/mcp"
+
+            # Generate a name if not provided
+            if server_name is None:
+                if stdio:
+                    # Extract command name from stdio
+                    cmd_parts = stdio.split()
+                    cmd_name = "stdio-server"
+                    for part in cmd_parts:
+                        part = os.path.basename(part)
+                        # Skip known runners, flags, and env vars
+                        if part.replace("-", "").replace("_", "").isalnum() and not (part.startswith("-") or part in ["docker", "uvx", "npx", "python", "node", "run"] or "=" in part):
+                            cmd_name = part
+                            break
+                    server_name = f"{cmd_name}-{port}"
+                elif grpc:
+                    server_name = f"grpc-{grpc.replace(':', '-')}"
+                else:
+                    server_name = f"server-{port}"
+
+            # Build registration payload
+            registration_data = {
+                "name": server_name,
+                "url": server_url,
+                "transport": "SSE" if is_sse else "STREAMABLEHTTP",
+            }
+
+            if server_description:
+                registration_data["description"] = server_description
+
+            # Register the server
+            console.print(f"[cyan]Registering server '{server_name}' at {server_url}...[/cyan]")
+            result = make_authenticated_request("POST", "/gateways", json_data=registration_data)
+            registered_server_id = result.get("id")
+            console.print(f"[green]✓ Server registered successfully (ID: {registered_server_id})[/green]")
+
+            # Set up cleanup for temporary servers
+            if temporary and registered_server_id:
+
+                def cleanup_server():
+                    """Unregister the server on exit."""
+                    if registered_server_id:
+                        try:
+                            console.print(f"\n[cyan]Unregistering temporary server (ID: {registered_server_id})...[/cyan]")
+                            make_authenticated_request("DELETE", f"/gateways/{registered_server_id}")
+                            console.print("[green]✓ Server unregistered successfully[/green]")
+                        except Exception as e:
+                            console.print(f"[yellow]Warning: Failed to unregister server: {e}[/yellow]")
+
+                # Register cleanup handlers
+                atexit.register(cleanup_server)
+
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to register server: {e}[/yellow]")
+            console.print("[yellow]Continuing without registration...[/yellow]")
+
+    # Wait for the process to terminate
+    proc.join()
