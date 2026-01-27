@@ -20,10 +20,12 @@ class TestRunCommand:
 
     def test_run_with_stdio_defaults(self) -> None:
         """Test run command with stdio and default parameters."""
-        with patch("cforge.commands.server.run.translate_main") as mock_translate:
-            invoke_typer_command(run, stdio="uvx mcp-server-git")
-            mock_translate.assert_called_once()
-            args = mock_translate.call_args[0][0]
+        with patch("mcpgateway.translate.main") as mock_translate, patch("multiprocessing.Process") as mock_process:
+            invoke_typer_command(run, stdio="uvx mcp-server-git", register=False)
+            mock_process.assert_called_once()
+            call_args = mock_process.call_args[1]
+            assert call_args.get("target") is mock_translate
+            args = call_args["args"][0]
             assert "--stdio" in args
             assert "uvx mcp-server-git" in args
             assert "--port" in args
