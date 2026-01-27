@@ -476,3 +476,262 @@ class TestRunCommand:
             mock_process.assert_called_once()
             call_args = mock_process.call_args[1]
             assert call_args.get("target") is mock_translate
+
+    def test_run_register_without_source_warns(self) -> None:
+        """Test that register=True without stdio or grpc prints a warning."""
+        with (
+            patch("mcpgateway.translate.main"),
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.get_console") as mock_console,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+        ):
+            mock_console_instance = MagicMock()
+            mock_console.return_value = mock_console_instance
+
+            # No stdio or grpc, but register=True
+            invoke_typer_command(run, register=True)
+
+            # Verify warning was printed about needing stdio or grpc
+            assert any("Warning" in str(call) and "register" in str(call).lower() for call in mock_console_instance.print.call_args_list)
+
+            # Verify registration was NOT attempted (since it was disabled)
+            mock_request.assert_not_called()
+
+            # Verify translate_main was still called via Process
+            mock_process.assert_called_once()
+
+    def test_run_health_check_connection_error_retry(self) -> None:
+        """Test that health check retries on connection errors."""
+        import requests as real_requests
+
+        with (
+            patch("mcpgateway.translate.main"),
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+            patch("cforge.commands.server.run.time") as mock_time,
+        ):
+            # First call raises ConnectionError, second succeeds
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(
+                side_effect=[
+                    real_requests.exceptions.ConnectionError("Connection refused"),
+                    mock_get_res,
+                ]
+            )
+            mock_requests.exceptions = real_requests.exceptions
+
+            # Mock time to control the loop
+            mock_time.time = MagicMock(side_effect=[0, 0.5, 1])
+            mock_time.sleep = MagicMock()
+
+            mock_request.return_value = {"id": "test-server-id"}
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, register=True)
+
+            # Verify health check was retried
+            assert mock_requests.get.call_count == 2
+
+            # Verify sleep was called after connection error
+            mock_time.sleep.assert_called_once_with(0.5)
+
+            # Verify registration succeeded after retry
+            mock_request.assert_called_once()
+            mock_process.assert_called_once()
+
+    def test_run_health_check_timeout(self) -> None:
+        """Test that health check timeout exits with error."""
+        import requests as real_requests
+
+        import typer
+
+        with (
+            patch("mcpgateway.translate.main"),
+            patch("multiprocessing.Process"),
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+            patch("cforge.commands.server.run.time") as mock_time,
+            patch("cforge.commands.server.run.get_console") as mock_console,
+            patch("cforge.commands.server.run.typer.exit", side_effect=typer.Exit(1)) as mock_exit,
+        ):
+            # Always raise ConnectionError
+            mock_requests.get = MagicMock(side_effect=real_requests.exceptions.ConnectionError("Connection refused"))
+            mock_requests.exceptions = real_requests.exceptions
+
+            # Mock time to simulate timeout
+            mock_time.time = MagicMock(side_effect=[0, 5, 11])  # Start, after first try, after timeout
+            mock_time.sleep = MagicMock()
+
+            mock_console_instance = MagicMock()
+            mock_console.return_value = mock_console_instance
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, register=True, register_timeout=10.0)
+
+            # Verify timeout error message was printed
+            assert any("Failed to connect" in str(call) for call in mock_console_instance.print.call_args_list)
+
+            # Verify typer.exit was called with error code
+            mock_exit.assert_called_once_with(1)
+
+            # Registration should not have been attempted
+            mock_request.assert_not_called()
+
+    def test_run_temporary_cleanup_success(self) -> None:
+        """Test that temporary server cleanup function works correctly."""
+        with (
+            patch("mcpgateway.translate.main"),
+            patch("multiprocessing.Process"),
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+            patch("cforge.commands.server.run.atexit") as mock_atexit,
+            patch("cforge.commands.server.run.get_console") as mock_console,
+        ):
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "temp-server-id", "name": "temp-server"}
+
+            mock_console_instance = MagicMock()
+            mock_console.return_value = mock_console_instance
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, temporary=True)
+
+            # Verify cleanup handler was registered
+            mock_atexit.register.assert_called_once()
+
+            # Get the cleanup function and call it
+            cleanup_fn = mock_atexit.register.call_args[0][0]
+
+            # Reset mock_request to track cleanup call
+            mock_request.reset_mock()
+
+            # Call cleanup function
+            cleanup_fn()
+
+            # Verify unregistration was attempted
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "DELETE"
+            assert "/gateways/temp-server-id" in call_args[0][1]
+
+    def test_run_temporary_cleanup_failure(self) -> None:
+        """Test that temporary server cleanup handles errors gracefully."""
+        with (
+            patch("mcpgateway.translate.main"),
+            patch("multiprocessing.Process"),
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+            patch("cforge.commands.server.run.atexit") as mock_atexit,
+            patch("cforge.commands.server.run.get_console") as mock_console,
+        ):
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "temp-server-id", "name": "temp-server"}
+
+            mock_console_instance = MagicMock()
+            mock_console.return_value = mock_console_instance
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, temporary=True)
+
+            # Get the cleanup function
+            cleanup_fn = mock_atexit.register.call_args[0][0]
+
+            # Make the DELETE request fail
+            mock_request.reset_mock()
+            mock_request.side_effect = Exception("Network error")
+
+            # Call cleanup function - should not raise
+            cleanup_fn()
+
+            # Verify warning was printed
+            assert any("Warning" in str(call) and "unregister" in str(call).lower() for call in mock_console_instance.print.call_args_list)
+
+    def test_run_health_check_retries_on_non_200(self) -> None:
+        """Test that health check retries when server returns non-200 status."""
+        with (
+            patch("mcpgateway.translate.main"),
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+            patch("cforge.commands.server.run.time") as mock_time,
+        ):
+            # First call returns 503, second returns 200
+            mock_get_res_503 = MagicMock()
+            mock_get_res_503.status_code = 503
+            mock_get_res_200 = MagicMock()
+            mock_get_res_200.status_code = 200
+            mock_requests.get = MagicMock(side_effect=[mock_get_res_503, mock_get_res_200])
+
+            # Mock time to control the loop
+            mock_time.time = MagicMock(side_effect=[0, 0.5, 1])
+            mock_time.sleep = MagicMock()
+
+            mock_request.return_value = {"id": "test-server-id"}
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, register=True)
+
+            # Verify health check was retried (called twice)
+            assert mock_requests.get.call_count == 2
+
+            # Verify registration succeeded
+            mock_request.assert_called_once()
+            mock_process.assert_called_once()
+
+    def test_run_registration_name_fallback_for_filtered_command(self) -> None:
+        """Test that server name falls back to stdio-server when all parts are filtered."""
+        with (
+            patch("mcpgateway.translate.main"),
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+        ):
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "test-server-id"}
+
+            # Use a command where all parts get filtered (uvx, python, node, etc.)
+            invoke_typer_command(run, stdio="uvx python node", port=9000, register=True)
+
+            # Verify name falls back to stdio-server-{port}
+            call_args = mock_request.call_args
+            json_data = call_args[1]["json_data"]
+            assert json_data["name"] == "stdio-server-9000"
+
+            mock_process.assert_called_once()
+
+    def test_run_temporary_without_source_uses_fallback_name(self) -> None:
+        """Test that temporary registration without stdio/grpc uses fallback server name."""
+        with (
+            patch("mcpgateway.translate.main"),
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+            patch("cforge.commands.server.run.atexit") as mock_atexit,
+        ):
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "temp-server-id"}
+
+            # temporary=True bypasses the stdio/grpc check, allowing registration without source
+            invoke_typer_command(run, port=9000, temporary=True)
+
+            # Verify fallback name server-{port} was used
+            call_args = mock_request.call_args
+            json_data = call_args[1]["json_data"]
+            assert json_data["name"] == "server-9000"
+
+            # Verify cleanup was registered
+            mock_atexit.register.assert_called_once()
+            mock_process.assert_called_once()
