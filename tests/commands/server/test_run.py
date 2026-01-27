@@ -8,7 +8,7 @@ Tests for the run command.
 """
 
 # Standard
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 # First-Party
 from cforge.commands.server.run import run
@@ -268,3 +268,211 @@ class TestRunCommand:
             assert "Authorization=AUTH_TOKEN" in args
             assert "--stateless" in args
             assert "--jsonResponse" in args
+
+    def test_run_with_registration_enabled(self) -> None:
+        """Test run command with auto-registration enabled (default)."""
+        with (
+            patch("mcpgateway.translate.main") as mock_translate,
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+        ):
+
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "test-server-id", "name": "test-server"}
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, register=True)
+
+            # Verify registration was attempted
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+            assert call_args[0][0] == "POST"
+            assert call_args[0][1] == "/gateways"
+
+            # Verify registration data
+            json_data = call_args[1]["json_data"]
+            assert "name" in json_data
+            assert "url" in json_data
+            assert "http://127.0.0.1:9000/sse" in json_data["url"]
+            assert json_data["transport"] == "SSE"
+
+            # Verify translate_main was called via Process
+            mock_process.assert_called_once()
+            proc_call_args = mock_process.call_args[1]
+            assert proc_call_args.get("target") is mock_translate
+
+    def test_run_with_registration_disabled(self) -> None:
+        """Test run command with registration explicitly disabled."""
+        with patch("mcpgateway.translate.main") as mock_translate, patch("multiprocessing.Process") as mock_process, patch("cforge.commands.server.run.make_authenticated_request") as mock_request:
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, register=False)
+
+            # Verify registration was NOT attempted
+            mock_request.assert_not_called()
+
+            # Verify translate_main was still called via Process
+            mock_process.assert_called_once()
+            call_args = mock_process.call_args[1]
+            assert call_args.get("target") is mock_translate
+
+    def test_run_with_temporary_registration(self) -> None:
+        """Test run command with temporary registration (auto-cleanup)."""
+        with (
+            patch("mcpgateway.translate.main") as mock_translate,
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+            patch("cforge.commands.server.run.atexit") as mock_atexit,
+        ):
+
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "temp-server-id", "name": "temp-server"}
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, temporary=True)
+
+            # Verify registration was attempted
+            assert mock_request.call_count >= 1
+            first_call = mock_request.call_args_list[0]
+            assert first_call[0][0] == "POST"
+            assert first_call[0][1] == "/gateways"
+
+            # Verify cleanup handlers were registered
+            mock_atexit.register.assert_called_once()
+
+            # Verify translate_main was called via Process
+            mock_process.assert_called_once()
+            call_args = mock_process.call_args[1]
+            assert call_args.get("target") is mock_translate
+
+    def test_run_with_custom_server_name_and_description(self) -> None:
+        """Test run command with custom server name and description."""
+        with (
+            patch("mcpgateway.translate.main") as mock_translate,
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+        ):
+
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "custom-server-id"}
+
+            invoke_typer_command(
+                run,
+                stdio="uvx mcp-server-git",
+                port=9000,
+                server_name="my-custom-server",
+                server_description="A custom MCP server for testing",
+                register=True,
+            )
+
+            # Verify registration data includes custom name and description
+            call_args = mock_request.call_args
+            json_data = call_args[1]["json_data"]
+            assert json_data["name"] == "my-custom-server"
+            assert json_data["description"] == "A custom MCP server for testing"
+
+            # Verify translate_main was called via Process
+            mock_process.assert_called_once()
+            proc_call_args = mock_process.call_args[1]
+            assert proc_call_args.get("target") is mock_translate
+
+    def test_run_with_registration_failure(self) -> None:
+        """Test run command handles registration failure gracefully."""
+        with (
+            patch("mcpgateway.translate.main") as mock_translate,
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+            patch("cforge.commands.server.run.get_console") as mock_console,
+        ):
+
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            # Simulate registration failure
+            mock_request.side_effect = Exception("Registration failed")
+            mock_console_instance = MagicMock()
+            mock_console.return_value = mock_console_instance
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, register=True)
+
+            # Verify warning was printed
+            assert any("Warning" in str(call) for call in mock_console_instance.print.call_args_list)
+
+            # Verify translate_main was still called via Process (server runs despite registration failure)
+            mock_process.assert_called_once()
+            call_args = mock_process.call_args[1]
+            assert call_args.get("target") is mock_translate
+
+    def test_run_registration_auto_generates_name_from_stdio(self) -> None:
+        """Test that server name is auto-generated from stdio command."""
+        with (
+            patch("mcpgateway.translate.main") as mock_translate,
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+        ):
+
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "auto-named-server"}
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, register=True)
+
+            # Verify name was auto-generated
+            call_args = mock_request.call_args
+            json_data = call_args[1]["json_data"]
+            assert "mcp-server-git" in json_data["name"] or "9000" in json_data["name"]
+
+            # Verify translate_main was called via Process
+            mock_process.assert_called_once()
+            proc_call_args = mock_process.call_args[1]
+            assert proc_call_args.get("target") is mock_translate
+
+    def test_run_registration_with_grpc_source(self) -> None:
+        """Test registration with gRPC source instead of stdio."""
+        with (
+            patch("mcpgateway.translate.main") as mock_translate,
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+        ):
+
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "grpc-server-id"}
+
+            invoke_typer_command(run, grpc="localhost:50051", port=9000, register=True)
+
+            # Verify registration was attempted
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+            json_data = call_args[1]["json_data"]
+
+            # Verify name includes grpc reference
+            assert "grpc" in json_data["name"].lower()
+
+            # Verify translate_main was called via Process
+            mock_process.assert_called_once()
+            call_args = mock_process.call_args[1]
+            assert call_args.get("target") is mock_translate
