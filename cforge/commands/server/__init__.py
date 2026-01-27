@@ -6,9 +6,3 @@ Authors: Gabe Goodhart
 
 Server command group.
 """
-
-# First-Party
-from cforge.commands.server.run import run
-from cforge.commands.server.serve import serve
-
-__all__ = ["run", "serve"]
