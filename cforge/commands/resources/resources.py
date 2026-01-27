@@ -177,7 +177,7 @@ def resources_toggle(
         assert len(this_status) == 1, "Multiple resources with same ID found"
         assert isinstance(this_status[0], dict)
         activate = not this_status[0].get("enabled")
-        result = make_authenticated_request("POST", f"/resources/{resource_id}/toggle", params={"activate": activate})
+        result = make_authenticated_request("POST", f"/resources/{resource_id}/state", params={"activate": activate})
         console.print("[green]✓ Resource toggled successfully![/green]")
         print_json(result, "Resource Status")
 

@@ -173,7 +173,7 @@ def tools_toggle(
             activate = False
         else:
             activate = True
-        result = make_authenticated_request("POST", f"/tools/{tool_id}/toggle", params={"activate": activate})
+        result = make_authenticated_request("POST", f"/tools/{tool_id}/state", params={"activate": activate})
         console.print("[green]✓ Tool toggled successfully![/green]")
         print_json(result, "Tool Status")
 
