@@ -231,7 +231,7 @@ class TestVirtualServersCommands:
                 # Verify second call was POST with activate=True
                 post_call = mock_req.call_args_list[1]
                 assert post_call[0][0] == "POST"
-                assert post_call[0][1] == "/servers/vs-123/toggle"
+                assert post_call[0][1] == "/servers/vs-123/state"
                 assert post_call[1]["params"]["activate"] is True
 
     def test_virtual_servers_toggle_from_active_to_inactive(self, mock_console) -> None:
@@ -254,7 +254,7 @@ class TestVirtualServersCommands:
                 # Verify second call was POST with activate=False
                 post_call = mock_req.call_args_list[1]
                 assert post_call[0][0] == "POST"
-                assert post_call[0][1] == "/servers/vs-123/toggle"
+                assert post_call[0][1] == "/servers/vs-123/state"
                 assert post_call[1]["params"]["activate"] is False
 
     def test_virtual_servers_toggle_detects_current_status(self, mock_console) -> None:

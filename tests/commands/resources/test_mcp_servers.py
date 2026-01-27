@@ -233,7 +233,7 @@ class TestMcpServersCommands:
             # Verify second call was POST with activate=True
             post_call = mocks.make_authenticated_request.call_args_list[1]
             assert post_call[0][0] == "POST"
-            assert post_call[0][1] == "/gateways/test-server-123/toggle"
+            assert post_call[0][1] == "/gateways/test-server-123/state"
             assert post_call[1]["params"]["activate"] is True
 
     def test_mcp_servers_toggle_from_enabled_to_disabled(self, mock_console) -> None:
@@ -263,7 +263,7 @@ class TestMcpServersCommands:
             # Verify second call was POST with activate=False
             post_call = mocks.make_authenticated_request.call_args_list[1]
             assert post_call[0][0] == "POST"
-            assert post_call[0][1] == "/gateways/test-server-123/toggle"
+            assert post_call[0][1] == "/gateways/test-server-123/state"
             assert post_call[1]["params"]["activate"] is False
 
     def test_mcp_servers_toggle_detects_current_status(self, mock_console) -> None:

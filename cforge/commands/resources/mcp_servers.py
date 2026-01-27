@@ -169,7 +169,7 @@ def mcp_servers_toggle(
             activate = False
         else:
             activate = True
-        result = make_authenticated_request("POST", f"/gateways/{mcp_server_id}/toggle", params={"activate": activate})
+        result = make_authenticated_request("POST", f"/gateways/{mcp_server_id}/state", params={"activate": activate})
         assert isinstance(result, dict)
         assert result["gateway"]["enabled"] == activate, "Failed to toggle MCP server"
         console.print("[green]✓ MCP server toggled successfully![/green]")

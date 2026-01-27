@@ -181,7 +181,7 @@ def virtual_servers_toggle(
             activate = False
         else:
             activate = True
-        result = make_authenticated_request("POST", f"/servers/{server_id}/toggle", params={"activate": activate})
+        result = make_authenticated_request("POST", f"/servers/{server_id}/state", params={"activate": activate})
         assert isinstance(result, dict)
         console.print("[green]✓ Virtual server toggled successfully![/green]")
         print_json(result, "Virtual Server Status")

@@ -174,7 +174,7 @@ def prompts_toggle(
         assert len(this_status) == 1, "Multiple prompts with same ID found"
         assert isinstance(this_status[0], dict)
         activate = not this_status[0].get("enabled")
-        result = make_authenticated_request("POST", f"/prompts/{prompt_id}/toggle", params={"activate": activate})
+        result = make_authenticated_request("POST", f"/prompts/{prompt_id}/state", params={"activate": activate})
         console.print("[green]✓ Prompt toggled successfully![/green]")
         print_json(result, "Prompt Status")
 

@@ -48,7 +48,7 @@ maintainers = [
 dependencies = [
     "rich>=13.9.4",
     "typer>=0.20.0",
-    "mcp-contextforge-gateway>=0.9.0",
+    "mcp-contextforge-gateway==1.0.0b2",
     "cryptography>=44.0.0",
 ]
 
@@ -352,6 +352,7 @@ filterwarnings = [
   "ignore: Support for class-based `config` is deprecated.*", # Pydantic upgraded needed upstream
   "ignore: `regex` has been deprecated, please use `pattern` instead", # FastAPI upgraded needed upstream
   "ignore: Extra environment options are deprecated. Use a preconfigured jinja2.Environment instead.", # Jinja2 deprecation upstream
+  "ignore:websockets.*is deprecated.*:DeprecationWarning", # websockets library upgrade needed upstream
 ]
 
 # ── fawltydeps ─────────────────────────────────────────────────────

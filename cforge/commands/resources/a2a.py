@@ -165,7 +165,7 @@ def a2a_toggle(
             activate = False
         else:
             activate = True
-        result = make_authenticated_request("POST", f"/a2a/{agent_id}/toggle", params={"activate": activate})
+        result = make_authenticated_request("POST", f"/a2a/{agent_id}/state", params={"activate": activate})
         assert isinstance(result, dict)
         assert result["enabled"] == activate, "Failed to toggle A2A Agent"
         console.print("[green]✓ A2A agent toggled successfully![/green]")
