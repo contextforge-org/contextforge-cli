@@ -235,13 +235,12 @@ def run(
 
                 def cleanup_server():
                     """Unregister the server on exit."""
-                    if registered_server_id:
-                        try:
-                            console.print(f"\n[cyan]Unregistering temporary server (ID: {registered_server_id})...[/cyan]")
-                            make_authenticated_request("DELETE", f"/gateways/{registered_server_id}")
-                            console.print("[green]✓ Server unregistered successfully[/green]")
-                        except Exception as e:
-                            console.print(f"[yellow]Warning: Failed to unregister server: {e}[/yellow]")
+                    try:
+                        console.print(f"\n[cyan]Unregistering temporary server (ID: {registered_server_id})...[/cyan]")
+                        make_authenticated_request("DELETE", f"/gateways/{registered_server_id}")
+                        console.print("[green]✓ Server unregistered successfully[/green]")
+                    except Exception as e:
+                        console.print(f"[yellow]Warning: Failed to unregister server: {e}[/yellow]")
 
                 # Register cleanup handlers
                 atexit.register(cleanup_server)
