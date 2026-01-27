@@ -180,13 +180,18 @@ def run(
             # Wait for the server to come up
             server_url_base = f"http://{host}:{port}"
             start_time = time.time()
+            ready = False
             while time.time() - start_time <= register_timeout:
                 try:
                     res = requests.get(f"{server_url_base}/healthz", timeout=0.1)
                     if res.status_code == 200:
+                        ready = True
                         break
                 except requests.exceptions.ConnectionError:
                     time.sleep(0.5)
+            if not ready:
+                console.print(f"[red]Failed to connect to server in {register_timeout}s[/red]")
+                typer.exit(1)
 
             # Build the server URL based on the protocol
             server_url = f"{server_url_base}{sse_path}" if is_sse else f"{server_url_base}/mcp"
