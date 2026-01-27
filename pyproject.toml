@@ -351,6 +351,7 @@ filterwarnings = [
   "ignore: Unclosed <MemoryObjectReceiveStream.*:ResourceWarning", # From async client calls
   "ignore: Support for class-based `config` is deprecated.*", # Pydantic upgraded needed upstream
   "ignore: `regex` has been deprecated, please use `pattern` instead", # FastAPI upgraded needed upstream
+  "ignore: Extra environment options are deprecated. Use a preconfigured jinja2.Environment instead.", # Jinja2 deprecation upstream
 ]
 
 # ── fawltydeps ─────────────────────────────────────────────────────

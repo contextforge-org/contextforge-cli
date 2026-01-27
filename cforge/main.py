@@ -32,6 +32,7 @@ import typer
 from cforge.common import get_app
 from cforge.commands.deploy.deploy import deploy
 from cforge.commands.server.serve import serve
+from cforge.commands.server.run import run
 from cforge.commands.settings import profiles
 from cforge.commands.settings.login import login
 from cforge.commands.settings.logout import logout
@@ -101,10 +102,11 @@ from cforge.commands.resources.a2a import (
 app = get_app()
 
 # ---------------------------------------------------------------------------
-# Server command
+# Server commands
 # ---------------------------------------------------------------------------
 
 app.command(rich_help_panel="Server")(serve)
+app.command(rich_help_panel="Server")(run)
 
 # ---------------------------------------------------------------------------
 # Settings commands
