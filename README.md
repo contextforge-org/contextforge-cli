@@ -96,7 +96,16 @@ cforge prompts execute <prompt-id>
 # MCP Servers
 cforge mcp-servers list
 cforge mcp-servers update <mcp-server-id> [file.json]
+
+# Plugins (read-only admin API)
+cforge plugins list [--search text] [--mode MODE] [--hook HOOK] [--tag TAG] [--json]
+cforge plugins get <plugin-name>
+cforge plugins stats
 ```
+
+Plugin commands call `/admin/plugins` endpoints and require:
+- `MCPGATEWAY_ADMIN_API_ENABLED=true` on the gateway
+- A token with `admin.plugins` permission
 
 ### Server Operations
 
