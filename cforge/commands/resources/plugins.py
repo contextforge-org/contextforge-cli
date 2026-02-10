@@ -5,6 +5,14 @@ SPDX-License-Identifier: Apache-2.0
 Authors: Matthew Grigsby
 
 CLI command group: plugins
+
+Note:
+    The CLI currently exposes read-only operations (list/get/stats) for plugins.
+    This matches the current capabilities of the gateway admin API: plugin
+    configuration is loaded from a YAML file at gateway startup, and the gateway
+    does not yet provide write endpoints for plugin CRUD/management. When
+    mcp-context-forge adds server-side write operations, this CLI can be extended
+    to support them.
 """
 
 # Standard
