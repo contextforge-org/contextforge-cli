@@ -23,7 +23,9 @@ class TestPluginCommands:
     def test_plugins_list_success(self, mock_console) -> None:
         """Test plugins list command with table output."""
         mock_response = {
-            "plugins": [{"name": "pii_filter", "version": "1.0.0", "author": "ContextForge", "mode": "enforce", "status": "enabled", "priority": 10, "hooks": ["tool_pre_invoke"], "tags": ["security"]}],
+            "plugins": [
+                {"name": "pii_filter", "version": "1.0.0", "author": "ContextForge", "mode": "enforce", "status": "enabled", "priority": 10, "hooks": ["tool_pre_invoke"], "tags": ["security"]}
+            ],
             "total": 1,
             "enabled_count": 1,
             "disabled_count": 0,
