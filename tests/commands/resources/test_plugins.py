@@ -12,13 +12,25 @@ import pytest
 import typer
 
 # First-Party
-from cforge.commands.resources.plugins import plugins_get, plugins_list, plugins_stats
+from cforge.commands.resources.plugins import PluginMode, plugins_get, plugins_list, plugins_stats
 from cforge.common import AuthenticationError, CLIError
-from tests.conftest import patch_functions
+from tests.conftest import invoke_typer_command, patch_functions
 
 
 class TestPluginCommands:
     """Tests for plugins commands."""
+
+    def test_plugin_mode_enum_is_case_insensitive(self) -> None:
+        """Typer Enum choices should accept case-insensitive values."""
+        assert PluginMode("EnFoRcE") == PluginMode.ENFORCE
+
+    def test_plugin_mode_enum_missing_non_string(self) -> None:
+        """Non-string values should not be coerced into Enum members."""
+        assert PluginMode._missing_(123) is None
+
+    def test_plugin_mode_enum_missing_unknown_value(self) -> None:
+        """Unknown strings should not be coerced into Enum members."""
+        assert PluginMode._missing_("nope") is None
 
     def test_plugins_list_success(self, mock_console) -> None:
         """Test plugins list command with table output."""
@@ -37,7 +49,7 @@ class TestPluginCommands:
             make_authenticated_request={"return_value": mock_response},
             print_table=None,
         ) as mocks:
-            plugins_list(json_output=False)
+            invoke_typer_command(plugins_list)
             mocks.print_table.assert_called_once()
 
     def test_plugins_list_json_output(self, mock_console) -> None:
@@ -49,14 +61,14 @@ class TestPluginCommands:
             make_authenticated_request={"return_value": mock_response},
             print_json=None,
         ) as mocks:
-            plugins_list(json_output=True)
+            invoke_typer_command(plugins_list, json_output=True)
             mocks.print_json.assert_called_once()
 
     def test_plugins_list_no_results(self, mock_console) -> None:
         """Test plugins list with no results."""
         mock_response = {"plugins": [], "total": 0, "enabled_count": 0, "disabled_count": 0}
         with patch_functions("cforge.commands.resources.plugins", get_console=mock_console, make_authenticated_request={"return_value": mock_response}):
-            plugins_list(json_output=False)
+            invoke_typer_command(plugins_list)
 
         assert any("No plugins found" in str(call) for call in mock_console.print.call_args_list)
 
@@ -68,7 +80,7 @@ class TestPluginCommands:
             make_authenticated_request={"return_value": {"plugins": [], "total": 0, "enabled_count": 0, "disabled_count": 0}},
             print_table=None,
         ) as mocks:
-            plugins_list(search="pii", mode="enforce", hook="tool_pre_invoke", tag="security", json_output=False)
+            invoke_typer_command(plugins_list, search="pii", mode=PluginMode.ENFORCE, hook="tool_pre_invoke", tag="security")
 
             call_args = mocks.make_authenticated_request.call_args
             assert call_args[0][0] == "GET"
@@ -79,7 +91,7 @@ class TestPluginCommands:
         """Test plugins list error handling."""
         with patch_functions("cforge.commands.resources.plugins", get_console=mock_console, make_authenticated_request={"side_effect": Exception("API error")}):
             with pytest.raises(typer.Exit):
-                plugins_list(json_output=False)
+                invoke_typer_command(plugins_list)
 
     def test_plugins_get_success(self, mock_console) -> None:
         """Test plugins get command."""
@@ -90,14 +102,14 @@ class TestPluginCommands:
             make_authenticated_request={"return_value": mock_plugin},
             print_json=None,
         ) as mocks:
-            plugins_get(name="pii_filter")
+            invoke_typer_command(plugins_get, name="pii_filter")
             mocks.print_json.assert_called_once()
 
     def test_plugins_get_error(self, mock_console) -> None:
         """Test plugins get error handling."""
         with patch_functions("cforge.commands.resources.plugins", get_console=mock_console, make_authenticated_request={"side_effect": Exception("API error")}):
             with pytest.raises(typer.Exit):
-                plugins_get(name="pii_filter")
+                invoke_typer_command(plugins_get, name="pii_filter")
 
     def test_plugins_stats_success(self, mock_console) -> None:
         """Test plugins stats command."""
@@ -108,14 +120,14 @@ class TestPluginCommands:
             make_authenticated_request={"return_value": mock_stats},
             print_json=None,
         ) as mocks:
-            plugins_stats()
+            invoke_typer_command(plugins_stats)
             mocks.print_json.assert_called_once()
 
     def test_plugins_stats_error(self, mock_console) -> None:
         """Test plugins stats error handling."""
         with patch_functions("cforge.commands.resources.plugins", get_console=mock_console, make_authenticated_request={"side_effect": Exception("API error")}):
             with pytest.raises(typer.Exit):
-                plugins_stats()
+                invoke_typer_command(plugins_stats)
 
     def test_plugins_list_forbidden_shows_permission_hint(self, mock_console) -> None:
         """Test plugins list shows a targeted hint on forbidden/admin failures."""
@@ -125,7 +137,7 @@ class TestPluginCommands:
             make_authenticated_request={"side_effect": AuthenticationError("Authentication required but not configured")},
         ):
             with pytest.raises(typer.Exit):
-                plugins_list(json_output=False)
+                invoke_typer_command(plugins_list)
 
         assert any("Requires admin.plugins permission" in str(call) for call in mock_console.print.call_args_list)
 
@@ -137,6 +149,6 @@ class TestPluginCommands:
             make_authenticated_request={"side_effect": CLIError("API request failed (404): Not Found")},
         ):
             with pytest.raises(typer.Exit):
-                plugins_list(json_output=False)
+                invoke_typer_command(plugins_list)
 
         assert any("Admin plugin API unavailable" in str(call) for call in mock_console.print.call_args_list)

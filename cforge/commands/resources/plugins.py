@@ -16,6 +16,7 @@ Note:
 """
 
 # Standard
+from enum import Enum
 from typing import Any, Dict, Optional
 
 # Third-Party
@@ -33,6 +34,28 @@ from cforge.common import (
 )
 
 
+class _CaseInsensitiveEnum(str, Enum):
+    """Enum that supports case-insensitive parsing for CLI options."""
+
+    @classmethod
+    def _missing_(cls, value: object) -> Optional["_CaseInsensitiveEnum"]:
+        if not isinstance(value, str):
+            return None
+        value_folded = value.casefold()
+        for member in cls:
+            if member.value.casefold() == value_folded:
+                return member
+        return None
+
+
+class PluginMode(_CaseInsensitiveEnum):
+    """Valid plugin mode filters supported by the gateway admin API."""
+
+    ENFORCE = "enforce"
+    PERMISSIVE = "permissive"
+    DISABLED = "disabled"
+
+
 def _handle_plugins_exception(exception: Exception) -> None:
     """Provide plugin-specific hints and raise a CLI error."""
     console = get_console()
@@ -47,7 +70,7 @@ def _handle_plugins_exception(exception: Exception) -> None:
 
 def plugins_list(
     search: Optional[str] = typer.Option(None, "--search", help="Search by plugin name, description, or author"),
-    mode: Optional[str] = typer.Option(None, "--mode", help="Filter by mode (enforce, permissive, disabled)"),
+    mode: Optional[PluginMode] = typer.Option(None, "--mode", help="Filter by mode"),
     hook: Optional[str] = typer.Option(None, "--hook", help="Filter by hook type"),
     tag: Optional[str] = typer.Option(None, "--tag", help="Filter by plugin tag"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
@@ -60,7 +83,7 @@ def plugins_list(
         if search:
             params["search"] = search
         if mode:
-            params["mode"] = mode
+            params["mode"] = mode.value
         if hook:
             params["hook"] = hook
         if tag:
@@ -71,18 +94,7 @@ def plugins_list(
         if json_output:
             print_json(result, "Plugins")
         else:
-            plugins: list[dict[str, Any]] = []
-            if isinstance(result, dict):
-                if "plugins" in result:
-                    raw_plugins = result.get("plugins", [])
-                    if isinstance(raw_plugins, list):
-                        plugins = raw_plugins
-                    elif isinstance(raw_plugins, dict):
-                        plugins = [raw_plugins]
-                else:
-                    plugins = [result]
-            elif isinstance(result, list):
-                plugins = result
+            plugins: list[dict[str, Any]] = result["plugins"]
 
             if plugins:
                 print_table(plugins, "Plugins", ["name", "version", "author", "mode", "status", "priority", "hooks", "tags"])
