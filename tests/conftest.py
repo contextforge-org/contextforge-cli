@@ -280,7 +280,7 @@ def authorized_mock_client(mock_client) -> Generator[None, None, None]:
         yield mock_client
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def mock_settings() -> Generator[CLISettings, None, None]:
     """Provide a context manager for mocking settings."""
     with tempfile.TemporaryDirectory(prefix="cforge_") as tmpdir:

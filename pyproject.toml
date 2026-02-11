@@ -342,7 +342,7 @@ plugins = ["pydantic.mypy"]              # Enable mypy plugin for Pydantic model
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra --cov=cforge --cov-report=html:htmlcov --cov-report=term"
+addopts = "-ra --cov=cforge --cov-report=html:htmlcov --cov-report=term --cov-fail-under=100"
 testpaths = [ "tests",]
 filterwarnings = [
   "error", # Turn ALL warnings into errors by default
@@ -353,6 +353,10 @@ filterwarnings = [
   "ignore: `regex` has been deprecated, please use `pattern` instead", # FastAPI upgraded needed upstream
   "ignore: Extra environment options are deprecated. Use a preconfigured jinja2.Environment instead.", # Jinja2 deprecation upstream
   "ignore:websockets.*is deprecated.*:DeprecationWarning", # websockets library upgrade needed upstream
+  "ignore:The argument signature for the.*PoolEvents.reset:sqlalchemy.exc.SADeprecationWarning", # sqlalchemy deprecation, fixed upstream in mcpgateway
+  "ignore: The HMAC key is 11 bytes long.*", # security warning from jwt
+  "ignore:unclosed database in.*:ResourceWarning", # sqlite3 connection leaked during mcpgateway import-time bootstrap
+  "ignore:Exception ignored in.*sqlite3.Connection.*:pytest.PytestUnraisableExceptionWarning", # same root cause as above
 ]
 
 # ── fawltydeps ─────────────────────────────────────────────────────
