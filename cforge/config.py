@@ -15,7 +15,7 @@ from typing import Generator, Optional, Self
 import os
 
 # Third-Party
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 # First-Party
 from mcpgateway.config import Settings
@@ -43,6 +43,7 @@ class CLISettings(Settings):
     """CLI-specific superset of core settings."""
 
     contextforge_home: Path = DEFAULT_HOME
+    in_container: bool = Field(default_factory=lambda: os.path.exists("/.dockerenv"))
 
     @model_validator(mode="after")
     def _set_database_url_default(self) -> Self:
