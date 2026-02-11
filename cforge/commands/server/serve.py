@@ -32,6 +32,7 @@ def serve(
     port: int = typer.Option(DEFAULT_PORT, "--port", help="Port to bind to"),
     reload: bool = typer.Option(False, "--reload", help="Enable auto-reload for development"),
     headless: bool = typer.Option(False, "--headless", help="Run without the admin UI"),
+    no_auth: bool = typer.Option(False, "--no-auth", help="Run without requiring authorization"),
     workers: int = typer.Option(1, "--workers", help="Number of worker processes"),
     log_level: str = typer.Option("info", "--log-level", help="Log level (debug, info, warning, error, critical)"),
 ) -> None:
@@ -42,6 +43,7 @@ def serve(
     set_serve_settings(
         mcpgateway_ui_enabled=not headless,
         mcpgateway_admin_api_enabled=not headless,
+        auth_required=not no_auth,
     )
     uvicorn.run(
         DEFAULT_APP,
