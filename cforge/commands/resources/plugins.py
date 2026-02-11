@@ -39,6 +39,12 @@ class _CaseInsensitiveEnum(str, Enum):
 
     @classmethod
     def _missing_(cls, value: object) -> Optional["_CaseInsensitiveEnum"]:
+        """Resolve unknown values by matching enum values case-insensitively.
+
+        Typer converts CLI strings into Enum members. Implementing `_missing_`
+        allows `--mode EnFoRcE` to resolve to `PluginMode.ENFORCE`, while still
+        rejecting unknown values.
+        """
         if not isinstance(value, str):
             return None
         value_folded = value.casefold()
