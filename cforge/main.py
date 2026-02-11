@@ -97,6 +97,11 @@ from cforge.commands.resources.a2a import (
     a2a_toggle,
     a2a_invoke,
 )
+from cforge.commands.resources.plugins import (
+    plugins_get,
+    plugins_list,
+    plugins_stats,
+)
 
 # Get the main app singleton
 app = get_app()
@@ -231,6 +236,17 @@ a2a_app.command("update")(a2a_update)
 a2a_app.command("delete")(a2a_delete)
 a2a_app.command("toggle")(a2a_toggle)
 a2a_app.command("invoke")(a2a_invoke)
+
+# ---------------------------------------------------------------------------
+# Plugins command group
+# ---------------------------------------------------------------------------
+
+plugins_app = typer.Typer(help="Manage gateway plugins (read-only)")
+app.add_typer(plugins_app, name="plugins", rich_help_panel="Resources")
+
+plugins_app.command("list")(plugins_list)
+plugins_app.command("get")(plugins_get)
+plugins_app.command("stats")(plugins_stats)
 
 # ---------------------------------------------------------------------------
 # Metrics command group
