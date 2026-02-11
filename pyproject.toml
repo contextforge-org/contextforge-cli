@@ -342,7 +342,7 @@ plugins = ["pydantic.mypy"]              # Enable mypy plugin for Pydantic model
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra --cov=cforge --cov-report=html:htmlcov --cov-report=term"
+addopts = "-ra --cov=cforge --cov-report=html:htmlcov --cov-report=term --cov-fail-under=100"
 testpaths = [ "tests",]
 filterwarnings = [
   "error", # Turn ALL warnings into errors by default
