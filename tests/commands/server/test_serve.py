@@ -17,7 +17,7 @@ import requests
 
 # First-Party
 from cforge.commands.server.serve import serve
-from tests.conftest import get_open_port
+from tests.conftest import get_open_port, invoke_typer_command
 
 
 class TestServeCommand:
@@ -26,7 +26,7 @@ class TestServeCommand:
     def test_serve_with_defaults(self) -> None:
         """Test serve command with default parameters."""
         with patch("cforge.commands.server.serve.uvicorn.run") as mock_run:
-            serve()
+            invoke_typer_command(serve)
             mock_run.assert_called_once()
             args, kwargs = mock_run.call_args
             assert "mcpgateway.main:app" in args
@@ -34,7 +34,7 @@ class TestServeCommand:
     def test_serve_with_custom_host_port(self) -> None:
         """Test serve command with custom host and port."""
         with patch("cforge.commands.server.serve.uvicorn.run") as mock_run:
-            serve(host="0.0.0.0", port=8080)
+            invoke_typer_command(serve, host="0.0.0.0", port=8080)
             mock_run.assert_called_once()
             _, kwargs = mock_run.call_args
             assert kwargs.get("host") == "0.0.0.0"
@@ -43,7 +43,7 @@ class TestServeCommand:
     def test_serve_with_reload(self) -> None:
         """Test serve command with reload enabled."""
         with patch("cforge.commands.server.serve.uvicorn.run") as mock_run:
-            serve(reload=True)
+            invoke_typer_command(serve, reload=True)
             mock_run.assert_called_once()
             _, kwargs = mock_run.call_args
             assert kwargs.get("reload") is True
@@ -51,7 +51,7 @@ class TestServeCommand:
     def test_serve_with_no_auth_sets_auth_required_false(self) -> None:
         """Test serve command with --no-auth sets auth_required to False."""
         with patch("cforge.commands.server.serve.uvicorn.run") as mock_run, patch("cforge.commands.server.serve.set_serve_settings") as mock_set_settings:
-            serve(no_auth=True, headless=False)
+            invoke_typer_command(serve, no_auth=True, headless=False)
             mock_run.assert_called_once()
             # When headless=False (default), UI and admin API are enabled (not headless = True)
             # When no_auth=True, auth_required should be False (not no_auth = False)
@@ -64,7 +64,7 @@ class TestServeCommand:
     def test_serve_without_no_auth_sets_auth_required_true(self) -> None:
         """Test serve command without --no-auth sets auth_required to True."""
         with patch("cforge.commands.server.serve.uvicorn.run") as mock_run, patch("cforge.commands.server.serve.set_serve_settings") as mock_set_settings:
-            serve(no_auth=False, headless=False)
+            invoke_typer_command(serve, no_auth=False, headless=False)
             mock_run.assert_called_once()
             # When headless=False (default), UI and admin API are enabled (not headless = True)
             # When no_auth=False (default), auth_required should be True (not no_auth = True)
@@ -90,7 +90,7 @@ class TestServeCommandIntegration:
         # thread does not block process exit.
         server_thread = threading.Thread(
             target=serve,
-            kwargs={"host": "127.0.0.1", "port": port, "reload": False, "workers": 1, "log_level": "error"},
+            kwargs={"host": "127.0.0.1", "port": port, "reload": False, "workers": 1, "log_level": "error", "no_auth": False},
             daemon=True,
         )
         server_thread.start()
