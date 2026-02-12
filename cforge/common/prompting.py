@@ -1,380 +1,26 @@
 # -*- coding: utf-8 -*-
-"""Location: ./cforge/common.py
-Copyright 2025
+"""
 SPDX-License-Identifier: Apache-2.0
-Authors: Gabe Goodhart
 
-Common utilities for Context Forge CLI.
+Schema-driven interactive prompting utilities.
+
+This module converts Pydantic annotations and JSON Schema definitions into
+interactive CLI prompts, including nested objects, arrays, enums, optional
+fields, and local `$ref` resolution. It is the shared input pipeline used by
+commands that need structured request payloads.
 """
 
-# Standard
-from enum import Enum
-from functools import lru_cache
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, get_args, get_origin
 import json
+from typing import Any, Callable, Dict, get_args, get_origin, List, Optional, Tuple, Union
 
-# Third-Party
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
-from rich.console import Console, ConsoleOptions, RenderResult, RenderableType
-from rich.segment import Segment
-from rich.measure import Measurement
-from rich.table import Table
-from rich.panel import Panel
-from rich.syntax import Syntax
-import requests
+from rich.console import Console
 import typer
 
-# First-Party
-from cforge.profile_utils import DEFAULT_PROFILE_ID
-from cforge.config import get_settings
-from cforge.credential_store import load_profile_credentials
-from cforge.profile_utils import get_active_profile
+from cforge.common.console import get_console
+from cforge.common.errors import CLIError
 
-# ------------------------------------------------------------------------------
-# Singletons
-# ------------------------------------------------------------------------------
-
-
-@lru_cache
-def get_console() -> Console:
-    """Get the console singleton.
-    Returns:
-        Console singleton
-    """
-    return Console()
-
-
-@lru_cache
-def get_app() -> typer.Typer:
-    """Get the typer singleton.
-    Returns:
-        typer singleton
-    """
-    return typer.Typer(
-        name="mcpgateway",
-        help="MCP Gateway - Production-grade MCP Gateway & Proxy CLI",
-        add_completion=True,
-        rich_markup_mode="rich",
-    )
-
-
-# ------------------------------------------------------------------------------
-# Error handling
-# ------------------------------------------------------------------------------
-
-
-class CLIError(Exception):
-    """Base class for CLI-related errors."""
-
-
-class AuthenticationError(CLIError):
-    """Raised when authentication fails."""
-
-
-class CaseInsensitiveEnum(str, Enum):
-    """Enum that supports case-insensitive parsing for CLI options."""
-
-    @classmethod
-    def _missing_(cls, value: object) -> Optional["CaseInsensitiveEnum"]:
-        """Resolve unknown values by matching enum values case-insensitively."""
-        if not isinstance(value, str):
-            return None
-        value_folded = value.casefold()
-        for member in cls:
-            if member.value.casefold() == value_folded:
-                return member
-        return None
-
-
-def split_exception_details(exception: Exception) -> Tuple[str, Any]:
-    """Try to get parsed details from the exception"""
-    exc_str = str(exception)
-    splits = exc_str.split(":", 1)
-    if len(splits) == 2:
-        try:
-            parsed_details = json.loads(splits[1])
-            return splits[0], parsed_details
-        except json.JSONDecodeError:
-            pass
-    return exc_str, None
-
-
-def handle_exception(exception: Exception) -> None:
-    """Handle an exception and print a friendly error message."""
-    e_str, e_detail = split_exception_details(exception)
-    get_console().print(f"[red]Error: {e_str}[/red]")
-    if e_detail:
-        print_json(e_detail, "Error details")
-    raise typer.Exit(1)
-
-
-# ------------------------------------------------------------------------------
-# Auth
-# ------------------------------------------------------------------------------
-
-
-def get_base_url() -> str:
-    """Get the full base URL for the current profile's server
-
-    TODO: This will need to support https in the future!
-
-    Returns:
-        The string URL base
-    """
-    return get_active_profile().api_url
-
-
-def get_token_file() -> Path:
-    """Get the path to the token file in contextforge_home.
-
-    Uses the active profile if available, otherwise returns the default token file.
-    For the virtual default profile, uses the unsuffixed token file.
-
-    Returns:
-        Path to the token file (profile-specific or default)
-    """
-    profile = get_active_profile()
-    suffix = "" if profile.id == DEFAULT_PROFILE_ID else f".{profile.id}"
-    return get_settings().contextforge_home / f"token{suffix}"
-
-
-def save_token(token: str) -> None:
-    """Save authentication token to contextforge_home/token file.
-
-    Args:
-        token: The JWT token to save
-    """
-    token_file = get_token_file()
-    token_file.parent.mkdir(parents=True, exist_ok=True)
-    token_file.write_text(token, encoding="utf-8")
-    # Set restrictive permissions (readable only by owner)
-    token_file.chmod(0o600)
-
-
-def load_token() -> Optional[str]:
-    """Load authentication token from contextforge_home/token file.
-
-    Returns:
-        Token string if found, None otherwise
-    """
-    token_file = get_token_file()
-    if token_file.exists():
-        return token_file.read_text(encoding="utf-8").strip()
-    return None
-
-
-def attempt_auto_login() -> Optional[str]:
-    """Attempt to automatically login using stored credentials.
-
-    This function tries to login using credentials stored by the desktop app
-    in the encrypted credential store. If successful, it saves the token
-    and returns it.
-
-    Returns:
-        Authentication token if auto-login succeeds, None otherwise
-    """
-    # Try to load credentials from the encrypted store
-    profile = get_active_profile()
-    credentials = load_profile_credentials(profile.id)
-    if not credentials or not credentials.get("email") or not credentials.get("password"):
-        return None
-
-    # Attempt login
-    try:
-        gateway_url = get_base_url()
-        response = requests.post(
-            f"{gateway_url}/auth/email/login",
-            json={"email": credentials["email"], "password": credentials["password"]},
-            headers={"Content-Type": "application/json"},
-        )
-
-        if response.status_code == 200:
-            data = response.json()
-            token = data.get("access_token")
-            if token:
-                # Save the token for future use
-                save_token(token)
-                return token
-    except Exception:
-        # Silently fail - auto-login is best-effort
-        pass
-
-    return None
-
-
-def get_auth_token() -> Optional[str]:
-    """Get authentication token from multiple sources in priority order.
-
-    Priority:
-    1. MCPGATEWAY_BEARER_TOKEN environment variable
-    2. Stored token in contextforge_home/token file
-    3. Auto-login using stored credentials (if available)
-
-    Returns:
-        Authentication token string or None if not configured
-    """
-    # Try environment variable first (highest priority)
-    token: Optional[str] = get_settings().mcpgateway_bearer_token
-    if token:
-        return token
-
-    # Try stored token file
-    token = load_token()
-    if token:
-        return token
-
-    # Try auto-login with stored credentials
-    token = attempt_auto_login()
-    if token:
-        return token
-
-    return None
-
-
-def make_authenticated_request(
-    method: str,
-    url: str,
-    json_data: Optional[Dict[str, Any]] = None,
-    params: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """Make an authenticated HTTP request to the gateway API.
-
-    Supports both authenticated and unauthenticated servers. Will attempt
-    the request without authentication if no token is configured, and only
-    fail if the server requires authentication.
-
-    Args:
-        method: HTTP method (GET, POST, etc.)
-        url: URL path for the request
-        json_data: Optional JSON data for request body
-        params: Optional query parameters
-
-    Returns:
-        JSON response from the API
-
-    Raises:
-        AuthenticationError: If the server requires authentication but none is configured
-        CLIError: If the API request fails
-    """
-    token = get_auth_token()
-
-    headers = {"Content-Type": "application/json"}
-    # Only add Authorization header if a token is available
-    if token:
-        if token.startswith("Basic "):
-            headers["Authorization"] = token
-        else:
-            headers["Authorization"] = f"Bearer {token}"
-
-    gateway_url = get_base_url()
-    full_url = f"{gateway_url}{url}"
-
-    try:
-        response = requests.request(method=method, url=full_url, json=json_data, params=params, headers=headers)
-
-        # Handle authentication errors specifically
-        if response.status_code in (401, 403):
-            raise AuthenticationError("Authentication required but not configured. " "Set MCPGATEWAY_BEARER_TOKEN environment variable or run 'cforge login'.")
-
-        if response.status_code >= 400:
-            raise CLIError(f"API request failed ({response.status_code}): {response.text}")
-
-        return response.json()
-
-    except requests.RequestException as e:
-        raise CLIError(f"Failed to connect to gateway at {gateway_url}: {str(e)}")
-
-
-# ------------------------------------------------------------------------------
-# Pretty Printing
-# ------------------------------------------------------------------------------
-
-
-class LineLimit:
-    """A renderable that limits the number of lines after rich's wrapping."""
-
-    def __init__(self, renderable: RenderableType, max_lines: int):
-        """Implement with the wrapped renderable and the max lines to render"""
-        self.renderable = renderable
-        self.max_lines = max_lines
-
-    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        """Hook the actual rendering to perform the per-line truncation"""
-
-        # Let rich render the content with proper wrapping
-        lines = console.render_lines(self.renderable, options, pad=False)
-
-        # Limit to max_lines
-        for i, line in enumerate(lines):
-            if i >= self.max_lines:
-                # Optionally add an ellipsis indicator
-                yield Segment("...")
-                break
-            yield from line
-            yield Segment.line()
-
-    def __rich_measure__(self, console: Console, options: ConsoleOptions) -> Measurement:
-        """Hook the measurement of this entry to pass through to the wrapped
-        renderable
-        """
-
-        return Measurement.get(console, options, self.renderable)
-
-
-def print_json(data: Any, title: Optional[str] = None) -> None:
-    """Pretty print JSON data with Rich.
-
-    Args:
-        data: Data to print
-        title: Optional title for the output
-    """
-    console = get_console()
-    json_str = json.dumps(data, indent=2, ensure_ascii=False)
-    syntax = Syntax(json_str, "json", theme="monokai", line_numbers=True)
-    if title:
-        console.print(Panel(syntax, title=title, border_style="green"))
-    else:
-        console.print(syntax)
-
-
-def print_table(
-    data: List[Dict],
-    title: str,
-    columns: List[str],
-    col_name_map: Optional[Dict[str, str]] = None,
-) -> None:
-    """Print data as a Rich table.
-
-    Args:
-        data: List of dictionaries to display
-        title: Title for the table
-        columns: List of column names to display
-        col_name_map: Optional mapping of column names to display
-    """
-    console = get_console()
-    table = Table(title=title, show_header=True, header_style="bold magenta")
-    col_name_map = col_name_map or {}
-    max_lines = get_settings().table_max_lines
-
-    for column in columns:
-        table.add_column(col_name_map.get(column, column), style="cyan")
-
-    for item in data:
-        row = [str(item.get(col, "")) for col in columns]
-        if max_lines > 0:
-            row = [LineLimit(cell, max_lines=max_lines) for cell in row]
-        table.add_row(*row)
-
-    console.print(table)
-
-
-# ------------------------------------------------------------------------------
-# Structure Guidance
-# ------------------------------------------------------------------------------
-
-# Very unlikely number for any valid int param
 _INT_SENTINEL_DEFAULT = -4231415
 
 
@@ -601,7 +247,7 @@ def _resolve_json_pointer(root_schema: Dict[str, Any], ref: str) -> Dict[str, An
 
 def _resolve_ref_schema(root_schema: Dict[str, Any], field_schema: Dict[str, Any], resolving: Tuple[str, ...] = ()) -> Dict[str, Any]:
     """Resolve $ref in schema and merge sibling keys as overrides."""
-    if not isinstance(field_schema, dict):  # pragma: no cover - defensive guard
+    if not isinstance(field_schema, dict):
         return {}
 
     ref_value = field_schema.get("$ref")
@@ -887,14 +533,30 @@ def _prompt_from_json_schema(
             if not typer.confirm("", default=False):
                 break
             entry, include_entry = _prompt_field_value("item", item_schema, is_required=True, field_indent=nested_indent)
-            if include_entry:  # pragma: no branch - required items are either included or raise
+            if include_entry:
                 values.append(entry)
 
         if values:
             return values, True
         if include_field or is_required:
             return [], True
-        return [], False  # pragma: no cover - optional arrays are skipped earlier when not included
+        return [], False
+
+    def _prompt_additional_properties(
+        object_indent: str,
+        assign_value: Callable[[str, str], None],
+    ) -> None:
+        """Prompt for additional object properties using a supplied value handler."""
+        while True:
+            formatted_object_indent = _format_prompt_indent(object_indent)
+            next_indent = _next_prompt_indent(object_indent)
+            formatted_next_indent = _format_prompt_indent(next_indent)
+            console.print(f"{formatted_object_indent}[dim]Add an extra field?[/dim] ", end="")
+            if not typer.confirm("", default=False):
+                break
+            console.print(f"{formatted_next_indent}Enter key", end="")
+            key = typer.prompt("", type=str)
+            assign_value(key, next_indent)
 
     def _prompt_object(field_schema: Dict[str, Any], prefilled: Optional[Dict[str, Any]], object_indent: str) -> Dict[str, Any]:
         """Prompt for object fields recursively."""
@@ -919,39 +581,30 @@ def _prompt_from_json_schema(
             if include_value:
                 data[field_name] = value
             if field_name in required_fields and field_name not in data:
-                raise CLIError(f"Field '{field_name}' is required")  # pragma: no cover - required field prompts already enforce this
+                raise CLIError(f"Field '{field_name}' is required")
 
         additional_properties = field_schema.get("additionalProperties")
         if isinstance(additional_properties, dict) and prompt_optional:
             additional_properties_schema = _resolve_ref_schema(schema, additional_properties)
-            while True:
-                formatted_object_indent = _format_prompt_indent(object_indent)
-                next_indent = _next_prompt_indent(object_indent)
-                formatted_next_indent = _format_prompt_indent(next_indent)
-                console.print(f"{formatted_object_indent}[dim]Add an extra field?[/dim] ", end="")
-                if not typer.confirm("", default=False):
-                    break
-                console.print(f"{formatted_next_indent}Enter key", end="")
-                key = typer.prompt("", type=str)
+
+            def _assign_typed_value(key: str, next_indent: str) -> None:
                 value, include_value = _prompt_field_value(key, additional_properties_schema, is_required=True, field_indent=next_indent)
-                if include_value:  # pragma: no branch - required additional fields are either included or raise
+                if include_value:
                     data[key] = value
+
+            _prompt_additional_properties(object_indent, _assign_typed_value)
         elif additional_properties is True and prompt_optional:
-            while True:
-                formatted_object_indent = _format_prompt_indent(object_indent)
-                next_indent = _next_prompt_indent(object_indent)
+
+            def _assign_json_value(key: str, next_indent: str) -> None:
                 formatted_next_indent = _format_prompt_indent(next_indent)
-                console.print(f"{formatted_object_indent}[dim]Add an extra field?[/dim] ", end="")
-                if not typer.confirm("", default=False):
-                    break
-                console.print(f"{formatted_next_indent}Enter key", end="")
-                key = typer.prompt("", type=str)
                 console.print(f"{formatted_next_indent}Enter JSON value", end="")
                 raw_value = typer.prompt("", type=str)
                 try:
                     data[key] = json.loads(raw_value)
                 except json.JSONDecodeError:
                     data[key] = raw_value
+
+            _prompt_additional_properties(object_indent, _assign_json_value)
 
         return data
 

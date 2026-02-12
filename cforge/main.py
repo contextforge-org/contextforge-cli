@@ -28,81 +28,82 @@ from __future__ import annotations
 # Third-Party
 import typer
 
-# First-Party
-from cforge.common import get_app
 from cforge.commands.deploy.deploy import deploy
-from cforge.commands.server.serve import serve
-from cforge.commands.server.run import run
-from cforge.commands.settings import profiles
-from cforge.commands.settings.login import login
-from cforge.commands.settings.logout import logout
-from cforge.commands.settings.whoami import whoami
-from cforge.commands.settings.export import export
-from cforge.commands.settings.import_cmd import import_cmd
-from cforge.commands.settings.config_schema import config_schema
-from cforge.commands.settings.support_bundle import support_bundle
-from cforge.commands.settings.version import version
 from cforge.commands.metrics.metrics import metrics_get, metrics_reset
-from cforge.commands.resources.tools import (
-    tools_list,
-    tools_get,
-    tools_create,
-    tools_update,
-    tools_delete,
-    tools_toggle,
-    tools_execute,
-)
-from cforge.commands.resources.resources import (
-    resources_list,
-    resources_get,
-    resources_create,
-    resources_update,
-    resources_delete,
-    resources_toggle,
-    resources_templates,
-)
-from cforge.commands.resources.prompts import (
-    prompts_list,
-    prompts_get,
-    prompts_create,
-    prompts_update,
-    prompts_delete,
-    prompts_toggle,
-    prompts_execute,
+from cforge.commands.resources.a2a import (
+    a2a_create,
+    a2a_delete,
+    a2a_get,
+    a2a_invoke,
+    a2a_list,
+    a2a_toggle,
+    a2a_update,
 )
 from cforge.commands.resources.mcp_servers import (
-    mcp_servers_list,
-    mcp_servers_get,
     mcp_servers_create,
-    mcp_servers_update,
     mcp_servers_delete,
+    mcp_servers_get,
+    mcp_servers_list,
     mcp_servers_toggle,
-)
-from cforge.commands.resources.virtual_servers import (
-    virtual_servers_list,
-    virtual_servers_get,
-    virtual_servers_create,
-    virtual_servers_update,
-    virtual_servers_delete,
-    virtual_servers_toggle,
-    virtual_servers_tools,
-    virtual_servers_resources,
-    virtual_servers_prompts,
-)
-from cforge.commands.resources.a2a import (
-    a2a_list,
-    a2a_get,
-    a2a_create,
-    a2a_update,
-    a2a_delete,
-    a2a_toggle,
-    a2a_invoke,
+    mcp_servers_update,
 )
 from cforge.commands.resources.plugins import (
     plugins_get,
     plugins_list,
     plugins_stats,
 )
+from cforge.commands.resources.prompts import (
+    prompts_create,
+    prompts_delete,
+    prompts_execute,
+    prompts_get,
+    prompts_list,
+    prompts_toggle,
+    prompts_update,
+)
+from cforge.commands.resources.resources import (
+    resources_create,
+    resources_delete,
+    resources_get,
+    resources_list,
+    resources_templates,
+    resources_toggle,
+    resources_update,
+)
+from cforge.commands.resources.tools import (
+    tools_create,
+    tools_delete,
+    tools_execute,
+    tools_get,
+    tools_list,
+    tools_toggle,
+    tools_update,
+)
+from cforge.commands.resources.virtual_servers import (
+    virtual_servers_create,
+    virtual_servers_delete,
+    virtual_servers_get,
+    virtual_servers_list,
+    virtual_servers_prompts,
+    virtual_servers_resources,
+    virtual_servers_toggle,
+    virtual_servers_tools,
+    virtual_servers_update,
+)
+from cforge.commands.server.run import run
+from cforge.commands.server.serve import serve
+from cforge.commands.settings import profiles
+from cforge.commands.settings.config_schema import config_schema
+from cforge.commands.settings.export import export
+from cforge.commands.settings.import_cmd import import_cmd
+from cforge.commands.settings.login import login
+from cforge.commands.settings.logout import logout
+from cforge.commands.settings.support_bundle import support_bundle
+from cforge.commands.settings.version import version
+from cforge.commands.settings.whoami import whoami
+
+# First-Party
+from cforge.common.console import get_app
 
 # Get the main app singleton
 app = get_app()

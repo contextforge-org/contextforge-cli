@@ -8,30 +8,30 @@ Pytest configuration and shared fixtures for Context Forge CLI tests.
 """
 
 # Standard
+from contextlib import contextmanager
 import inspect
 import logging
 import os
+from pathlib import Path
 import socket
 import sys
 import tempfile
-import time
 import threading
-import urllib3
-from contextlib import contextmanager
-from pathlib import Path
+import time
 from types import SimpleNamespace
 from typing import Any, Callable, Generator, List, Union
 from unittest.mock import Mock, patch
 
-# Third-Party
-import pytest
-import uvicorn
 from fastapi.testclient import TestClient
 from mcp.server.fastmcp import FastMCP
 from pydantic import SecretStr
+
+# Third-Party
+import pytest
 from typer.models import OptionInfo
 from typer.testing import CliRunner
-
+import urllib3
+import uvicorn
 
 # Before importing anything from the core, force the database to use a temp dir
 # NOTE: In memory results in missing table errors
@@ -41,7 +41,6 @@ os.environ["DATABASE_URL"] = f"sqlite:////{working_dir.__enter__()}/mcp.db"
 
 # First-Party
 from cforge.config import CLISettings, get_settings  # noqa: E402
-
 
 # Suppress urllib3 retry warnings during tests
 logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
@@ -269,7 +268,7 @@ def mock_client() -> Generator[TestClient, None, None]:
     client = TestClient(app)
     mock_client = Mock(wraps=client)
 
-    with patch("cforge.common.requests.request", mock_client.request):
+    with patch("cforge.common.http.requests.request", mock_client.request):
         yield mock_client
 
 

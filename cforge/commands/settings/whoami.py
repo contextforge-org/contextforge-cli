@@ -8,7 +8,9 @@ CLI command: whoami
 """
 
 # First-Party
-from cforge.common import get_console, get_settings, get_token_file, load_token
+from cforge.common.console import get_console
+from cforge.common.http import get_token_file, load_token
+from cforge.config import get_settings
 from cforge.profile_utils import get_active_profile
 
 

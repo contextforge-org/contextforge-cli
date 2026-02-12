@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Location: ./cforge/commands/resources/plugins.py
-Copyright 2025
+"""
 SPDX-License-Identifier: Apache-2.0
-Authors: Matthew Grigsby
 
 CLI command group: plugins
 
@@ -15,23 +13,14 @@ Note:
     to support them.
 """
 
-# Standard
 from typing import Any, Dict, Optional
 
-# Third-Party
 import typer
 
-# First-Party
-from cforge.common import (
-    CaseInsensitiveEnum,
-    AuthenticationError,
-    CLIError,
-    get_console,
-    handle_exception,
-    make_authenticated_request,
-    print_json,
-    print_table,
-)
+from cforge.common.console import get_console
+from cforge.common.errors import AuthenticationError, CaseInsensitiveEnum, CLIError, handle_exception
+from cforge.common.http import make_authenticated_request
+from cforge.common.render import print_json, print_table
 
 
 class PluginMode(CaseInsensitiveEnum):

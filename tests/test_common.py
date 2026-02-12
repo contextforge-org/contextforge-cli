@@ -9,37 +9,25 @@ Tests for common utility functions.
 
 # Standard
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from unittest.mock import Mock, patch
 import stat
 import tempfile
+from typing import Any, Dict, List, Optional
+from unittest.mock import Mock, patch
 
 # Third-Party
 from pydantic import BaseModel, Field
+import pytest
+import requests
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
-import pytest
-import requests
 
 # First-Party
-from cforge.common import (
-    _INT_SENTINEL_DEFAULT,
-    AuthenticationError,
-    CLIError,
-    LineLimit,
-    get_app,
-    get_auth_token,
-    get_console,
-    get_token_file,
-    load_token,
-    make_authenticated_request,
-    print_json,
-    print_table,
-    prompt_for_json_schema,
-    prompt_for_schema,
-    save_token,
-)
+from cforge.common.console import get_app, get_console
+from cforge.common.errors import AuthenticationError, CLIError
+from cforge.common.http import get_auth_token, get_token_file, load_token, make_authenticated_request, save_token
+from cforge.common.prompting import _INT_SENTINEL_DEFAULT, prompt_for_json_schema, prompt_for_schema
+from cforge.common.render import LineLimit, print_json, print_table
 from tests.conftest import mock_client_login
 
 
@@ -73,8 +61,9 @@ class TestTokenManagement:
 
     def test_get_token_file_with_active_profile(self, mock_settings) -> None:
         """Test getting the token file path uses active profile when available."""
-        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
         from datetime import datetime
+
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         # Create and save an active profile
         profile_id = "active-profile-456"
@@ -101,7 +90,7 @@ class TestTokenManagement:
         test_token = "test_token_123"
 
         with tempfile.NamedTemporaryFile() as temp_token_file:
-            with patch("cforge.common.get_token_file", return_value=Path(temp_token_file.name)):
+            with patch("cforge.common.http.get_token_file", return_value=Path(temp_token_file.name)):
                 save_token(test_token)
                 loaded_token = load_token()
 
@@ -109,8 +98,9 @@ class TestTokenManagement:
 
     def test_save_and_load_token_with_active_profile(self, mock_settings) -> None:
         """Test saving and loading a token with an active profile."""
-        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
         from datetime import datetime
+
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         test_token = "profile_token_456"
         profile_id = "test-profile-789"
@@ -142,8 +132,9 @@ class TestTokenManagement:
 
     def test_save_token_different_profiles(self, mock_settings) -> None:
         """Test that different profiles have separate token files."""
-        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
         from datetime import datetime
+
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         token1 = "token_for_profile_1"
         token2 = "token_for_profile_2"
@@ -196,15 +187,16 @@ class TestTokenManagement:
         """Test loading a token when file doesn't exist."""
         nonexistent_file = tmp_path / "nonexistent" / "token"
 
-        with patch("cforge.common.get_token_file", return_value=nonexistent_file):
+        with patch("cforge.common.http.get_token_file", return_value=nonexistent_file):
             token = load_token()
 
         assert token is None
 
     def test_load_token_nonexistent_profile(self, mock_settings) -> None:
         """Test loading a token for a profile that doesn't have a token file."""
-        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
         from datetime import datetime
+
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         profile_id = "nonexistent-profile"
 
@@ -234,9 +226,10 @@ class TestBaseUrl:
 
     def test_get_base_url_with_active_profile(self, mock_settings) -> None:
         """Test get_base_url returns profile's API URL when active profile exists."""
-        from cforge.common import get_base_url
-        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
         from datetime import datetime
+
+        from cforge.common.http import get_base_url
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         # Create and save a profile
         profile = AuthProfile(
@@ -259,7 +252,7 @@ class TestBaseUrl:
 
     def test_get_base_url_without_active_profile(self, mock_settings) -> None:
         """Test get_base_url returns default URL when no active profile."""
-        from cforge.common import get_base_url
+        from cforge.common.http import get_base_url
 
         # No profile saved, should use settings
         base_url = get_base_url()
@@ -273,7 +266,7 @@ class TestAuthentication:
         """Test getting auth token from environment variable."""
         # Create a new settings instance with token
         mock_settings.mcpgateway_bearer_token = "env_token"
-        with patch("cforge.common.load_token", return_value=None):
+        with patch("cforge.common.http.load_token", return_value=None):
             token = get_auth_token()
 
         assert token == "env_token"
@@ -281,7 +274,7 @@ class TestAuthentication:
     def test_get_auth_token_from_file(self, mock_settings) -> None:
         """Test getting auth token from file when env var not set."""
         # mock_settings already has mcpgateway_bearer_token=None
-        with patch("cforge.common.load_token", return_value="file_token"):
+        with patch("cforge.common.http.load_token", return_value="file_token"):
             token = get_auth_token()
 
         assert token == "file_token"
@@ -289,7 +282,7 @@ class TestAuthentication:
     def test_get_auth_token_none(self, mock_settings) -> None:
         """Test getting auth token when none available."""
         # mock_settings already has mcpgateway_bearer_token=None
-        with patch("cforge.common.load_token", return_value=None):
+        with patch("cforge.common.http.load_token", return_value=None):
             token = get_auth_token()
 
         assert token is None
@@ -300,16 +293,17 @@ class TestAutoLogin:
 
     def test_attempt_auto_login_no_profile(self, mock_settings):
         """Test auto-login when no profile is active."""
-        from cforge.common import attempt_auto_login
+        from cforge.common.http import attempt_auto_login
 
         token = attempt_auto_login()
         assert token is None
 
     def test_attempt_auto_login_no_credentials(self, mock_settings):
         """Test auto-login when credentials are not available."""
-        from cforge.common import attempt_auto_login
-        from cforge.profile_utils import AuthProfile
         from datetime import datetime
+
+        from cforge.common.http import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
 
         mock_profile = AuthProfile(
             id="test-profile",
@@ -320,16 +314,17 @@ class TestAutoLogin:
             createdAt=datetime.now(),
         )
 
-        with patch("cforge.common.get_active_profile", return_value=mock_profile):
-            with patch("cforge.common.load_profile_credentials", return_value=None):
+        with patch("cforge.common.http.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.http.load_profile_credentials", return_value=None):
                 token = attempt_auto_login()
                 assert token is None
 
     def test_attempt_auto_login_missing_email(self, mock_settings):
         """Test auto-login when email is missing from credentials."""
-        from cforge.common import attempt_auto_login
-        from cforge.profile_utils import AuthProfile
         from datetime import datetime
+
+        from cforge.common.http import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
 
         mock_profile = AuthProfile(
             id="test-profile",
@@ -340,16 +335,17 @@ class TestAutoLogin:
             createdAt=datetime.now(),
         )
 
-        with patch("cforge.common.get_active_profile", return_value=mock_profile):
-            with patch("cforge.common.load_profile_credentials", return_value={"password": "test"}):
+        with patch("cforge.common.http.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.http.load_profile_credentials", return_value={"password": "test"}):
                 token = attempt_auto_login()
                 assert token is None
 
     def test_attempt_auto_login_missing_password(self, mock_settings):
         """Test auto-login when password is missing from credentials."""
-        from cforge.common import attempt_auto_login
-        from cforge.profile_utils import AuthProfile
         from datetime import datetime
+
+        from cforge.common.http import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
 
         mock_profile = AuthProfile(
             id="test-profile",
@@ -360,17 +356,18 @@ class TestAutoLogin:
             createdAt=datetime.now(),
         )
 
-        with patch("cforge.common.get_active_profile", return_value=mock_profile):
-            with patch("cforge.common.load_profile_credentials", return_value={"email": "test@example.com"}):
+        with patch("cforge.common.http.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.http.load_profile_credentials", return_value={"email": "test@example.com"}):
                 token = attempt_auto_login()
                 assert token is None
 
-    @patch("cforge.common.requests.post")
+    @patch("cforge.common.http.requests.post")
     def test_attempt_auto_login_success(self, mock_post, mock_settings):
         """Test successful auto-login."""
-        from cforge.common import attempt_auto_login, load_token
-        from cforge.profile_utils import AuthProfile
         from datetime import datetime
+
+        from cforge.common.http import attempt_auto_login, load_token
+        from cforge.profile_utils import AuthProfile
 
         mock_profile = AuthProfile(
             id="test-profile",
@@ -387,8 +384,8 @@ class TestAutoLogin:
         mock_response.json.return_value = {"access_token": "auto-login-token"}
         mock_post.return_value = mock_response
 
-        with patch("cforge.common.get_active_profile", return_value=mock_profile):
-            with patch("cforge.common.load_profile_credentials", return_value={"email": "test@example.com", "password": "test-pass"}):
+        with patch("cforge.common.http.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.http.load_profile_credentials", return_value={"email": "test@example.com", "password": "test-pass"}):
                 token = attempt_auto_login()
                 assert token == "auto-login-token"
 
@@ -396,12 +393,13 @@ class TestAutoLogin:
                 saved_token = load_token()
                 assert saved_token == "auto-login-token"
 
-    @patch("cforge.common.requests.post")
+    @patch("cforge.common.http.requests.post")
     def test_attempt_auto_login_failed_login(self, mock_post, mock_settings):
         """Test auto-login when login fails."""
-        from cforge.common import attempt_auto_login
-        from cforge.profile_utils import AuthProfile
         from datetime import datetime
+
+        from cforge.common.http import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
 
         mock_profile = AuthProfile(
             id="test-profile",
@@ -417,17 +415,18 @@ class TestAutoLogin:
         mock_response.status_code = 401
         mock_post.return_value = mock_response
 
-        with patch("cforge.common.get_active_profile", return_value=mock_profile):
-            with patch("cforge.common.load_profile_credentials", return_value={"email": "test@example.com", "password": "wrong-pass"}):
+        with patch("cforge.common.http.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.http.load_profile_credentials", return_value={"email": "test@example.com", "password": "wrong-pass"}):
                 token = attempt_auto_login()
                 assert token is None
 
-    @patch("cforge.common.requests.post")
+    @patch("cforge.common.http.requests.post")
     def test_attempt_auto_login_no_token_in_response(self, mock_post, mock_settings):
         """Test auto-login when response doesn't contain token."""
-        from cforge.common import attempt_auto_login
-        from cforge.profile_utils import AuthProfile
         from datetime import datetime
+
+        from cforge.common.http import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
 
         mock_profile = AuthProfile(
             id="test-profile",
@@ -444,17 +443,18 @@ class TestAutoLogin:
         mock_response.json.return_value = {}
         mock_post.return_value = mock_response
 
-        with patch("cforge.common.get_active_profile", return_value=mock_profile):
-            with patch("cforge.common.load_profile_credentials", return_value={"email": "test@example.com", "password": "test-pass"}):
+        with patch("cforge.common.http.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.http.load_profile_credentials", return_value={"email": "test@example.com", "password": "test-pass"}):
                 token = attempt_auto_login()
                 assert token is None
 
-    @patch("cforge.common.requests.post")
+    @patch("cforge.common.http.requests.post")
     def test_attempt_auto_login_request_exception(self, mock_post, mock_settings):
         """Test auto-login when request raises exception."""
-        from cforge.common import attempt_auto_login
-        from cforge.profile_utils import AuthProfile
         from datetime import datetime
+
+        from cforge.common.http import attempt_auto_login
+        from cforge.profile_utils import AuthProfile
 
         mock_profile = AuthProfile(
             id="test-profile",
@@ -468,18 +468,18 @@ class TestAutoLogin:
         # Mock request exception
         mock_post.side_effect = Exception("Connection error")
 
-        with patch("cforge.common.get_active_profile", return_value=mock_profile):
-            with patch("cforge.common.load_profile_credentials", return_value={"email": "test@example.com", "password": "test-pass"}):
+        with patch("cforge.common.http.get_active_profile", return_value=mock_profile):
+            with patch("cforge.common.http.load_profile_credentials", return_value={"email": "test@example.com", "password": "test-pass"}):
                 token = attempt_auto_login()
                 assert token is None
 
     def test_get_auth_token_with_auto_login(self, mock_settings):
         """Test that get_auth_token attempts auto-login when no token is available."""
-        from cforge.common import get_auth_token
+        from cforge.common.http import get_auth_token
 
         # Mock no env token and no file token, but successful auto-login
-        with patch("cforge.common.load_token", return_value=None):
-            with patch("cforge.common.attempt_auto_login", return_value="auto-token"):
+        with patch("cforge.common.http.load_token", return_value=None):
+            with patch("cforge.common.http.attempt_auto_login", return_value="auto-token"):
                 token = get_auth_token()
                 assert token == "auto-token"
 
@@ -504,8 +504,8 @@ class TestLineLimit:
 
     def test_line_limit_basic_truncation(self) -> None:
         """Test that LineLimit truncates content to max_lines."""
-        from rich.text import Text
         from rich.console import Console
+        from rich.text import Text
 
         console = Console()
         # Create text with 5 lines
@@ -529,8 +529,8 @@ class TestLineLimit:
 
     def test_line_limit_no_truncation_needed(self) -> None:
         """Test that LineLimit doesn't truncate when content is within limit."""
-        from rich.text import Text
         from rich.console import Console
+        from rich.text import Text
 
         console = Console()
         # Create text with 2 lines, limit to 5
@@ -549,8 +549,8 @@ class TestLineLimit:
 
     def test_line_limit_exact_match(self) -> None:
         """Test LineLimit when content exactly matches max_lines."""
-        from rich.text import Text
         from rich.console import Console
+        from rich.text import Text
 
         console = Console()
         # Create text with exactly 3 lines
@@ -570,8 +570,8 @@ class TestLineLimit:
 
     def test_line_limit_zero_lines(self) -> None:
         """Test LineLimit with max_lines=0 shows only ellipsis."""
-        from rich.text import Text
         from rich.console import Console
+        from rich.text import Text
 
         console = Console()
         text = Text("Line 1\nLine 2")
@@ -588,8 +588,8 @@ class TestLineLimit:
 
     def test_line_limit_one_line(self) -> None:
         """Test LineLimit with max_lines=1."""
-        from rich.text import Text
         from rich.console import Console
+        from rich.text import Text
 
         console = Console()
         text = Text("Line 1\nLine 2\nLine 3")
@@ -607,8 +607,8 @@ class TestLineLimit:
 
     def test_line_limit_with_long_single_line(self) -> None:
         """Test LineLimit with a single long line that wraps."""
-        from rich.text import Text
         from rich.console import Console
+        from rich.text import Text
 
         console = Console(width=80)  # Set fixed width for predictable wrapping
         # Create a very long line that will wrap
@@ -627,8 +627,8 @@ class TestLineLimit:
 
     def test_line_limit_measurement_passthrough(self) -> None:
         """Test that LineLimit passes through measurement to wrapped renderable."""
-        from rich.text import Text
         from rich.console import Console
+        from rich.text import Text
 
         console = Console()
         text = Text("Test content")
@@ -644,8 +644,8 @@ class TestLineLimit:
 
     def test_line_limit_with_empty_content(self) -> None:
         """Test LineLimit with empty content."""
-        from rich.text import Text
         from rich.console import Console
+        from rich.text import Text
 
         console = Console()
         text = Text("")
@@ -661,8 +661,8 @@ class TestLineLimit:
 
     def test_line_limit_preserves_styling(self) -> None:
         """Test that LineLimit preserves rich styling in truncated content."""
-        from rich.text import Text
         from rich.console import Console
+        from rich.text import Text
 
         console = Console()
         # Create styled text
@@ -694,13 +694,13 @@ class TestMakeAuthenticatedRequest:
     def test_request_no_auth_raises_error_when_server_requires_it(self, mock_settings) -> None:
         """Test that request without auth raises AuthenticationError when server requires it."""
         # Ensure no token is available
-        with patch("cforge.common.load_token", return_value=None):
+        with patch("cforge.common.http.load_token", return_value=None):
             # Mock a 401 response from server (authentication required)
             mock_response = Mock()
             mock_response.status_code = 401
             mock_response.text = "Unauthorized"
 
-            with patch("cforge.common.requests.request", return_value=mock_response):
+            with patch("cforge.common.http.requests.request", return_value=mock_response):
                 with pytest.raises(AuthenticationError) as exc_info:
                     make_authenticated_request("GET", "/test")
 
@@ -709,13 +709,13 @@ class TestMakeAuthenticatedRequest:
     def test_request_without_auth_succeeds_on_unauthenticated_server(self, mock_settings) -> None:
         """Test that request without auth succeeds when server doesn't require it."""
         # Ensure no token is available
-        with patch("cforge.common.load_token", return_value=None):
+        with patch("cforge.common.http.load_token", return_value=None):
             # Mock a successful response from server (no auth required)
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"result": "success"}
 
-            with patch("cforge.common.requests.request", return_value=mock_response) as mock_req:
+            with patch("cforge.common.http.requests.request", return_value=mock_response) as mock_req:
                 result = make_authenticated_request("GET", "/test")
 
                 # Verify the request was made without Authorization header
@@ -748,7 +748,7 @@ class TestMakeAuthenticatedRequest:
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": "success"}
 
-        with patch("cforge.common.requests.request", return_value=mock_response) as mock_req:
+        with patch("cforge.common.http.requests.request", return_value=mock_response) as mock_req:
             make_authenticated_request("POST", "/api/test", json_data={"data": "value"})
 
             # Verify Basic auth is passed as-is
@@ -763,7 +763,7 @@ class TestMakeAuthenticatedRequest:
         mock_response.status_code = 404
         mock_response.text = "Not found"
 
-        with patch("cforge.common.requests.request", return_value=mock_response):
+        with patch("cforge.common.http.requests.request", return_value=mock_response):
             with pytest.raises(CLIError) as exc_info:
                 make_authenticated_request("GET", "/api/missing")
 
@@ -774,7 +774,7 @@ class TestMakeAuthenticatedRequest:
         """Test that connection errors are properly raised."""
         mock_settings.mcpgateway_bearer_token = "test_token"
 
-        with patch("cforge.common.requests.request", side_effect=requests.ConnectionError("Connection refused")):
+        with patch("cforge.common.http.requests.request", side_effect=requests.ConnectionError("Connection refused")):
             with pytest.raises(CLIError) as exc_info:
                 make_authenticated_request("GET", "/api/test")
 
@@ -1948,7 +1948,7 @@ class TestTokenFilePermissions:
         with tempfile.TemporaryDirectory() as temp_dir:
             token_path = Path(temp_dir) / "nested" / "dirs" / "token"
 
-            with patch("cforge.common.get_token_file", return_value=token_path):
+            with patch("cforge.common.http.get_token_file", return_value=token_path):
                 save_token("test_token")
 
                 assert token_path.exists()
@@ -1960,7 +1960,7 @@ class TestTokenFilePermissions:
             token_path = Path(temp_file.name)
 
             try:
-                with patch("cforge.common.get_token_file", return_value=token_path):
+                with patch("cforge.common.http.get_token_file", return_value=token_path):
                     save_token("test_token")
 
                     # Check permissions are 0o600 (read/write for owner only)

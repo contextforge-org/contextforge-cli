@@ -8,8 +8,8 @@ Tests for the login command.
 """
 
 # Standard
-import tempfile
 from pathlib import Path
+import tempfile
 from unittest.mock import Mock, patch
 
 # Third-Party
@@ -19,7 +19,8 @@ import typer
 
 # First-Party
 from cforge.commands.settings.login import login
-from cforge.common import AuthenticationError, make_authenticated_request
+from cforge.common.errors import AuthenticationError
+from cforge.common.http import make_authenticated_request
 
 
 class TestLoginCommand:
@@ -143,8 +144,9 @@ class TestLoginWithProfiles:
 
     def test_login_saves_to_profile_specific_token_file(self, mock_base_url, mock_console, mock_settings) -> None:
         """Test that login saves token to profile-specific file when profile is active."""
-        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
         from datetime import datetime
+
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         mock_response = Mock()
         mock_response.status_code = 200
@@ -179,8 +181,9 @@ class TestLoginWithProfiles:
 
     def test_login_with_multiple_profiles(self, mock_base_url, mock_console, mock_settings) -> None:
         """Test that different profiles can have different tokens."""
-        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
         from datetime import datetime
+
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         profile_id1 = "profile-1"
         profile_id2 = "profile-2"

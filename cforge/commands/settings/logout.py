@@ -8,7 +8,8 @@ CLI command: logout
 """
 
 # First-Party
-from cforge.common import get_console, get_token_file
+from cforge.common.console import get_console
+from cforge.common.http import get_token_file
 
 
 def logout() -> None:

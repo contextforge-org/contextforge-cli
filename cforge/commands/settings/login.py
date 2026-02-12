@@ -12,7 +12,8 @@ import requests
 import typer
 
 # First-Party
-from cforge.common import get_base_url, get_console, get_token_file, save_token
+from cforge.common.console import get_console
+from cforge.common.http import get_base_url, get_token_file, save_token
 
 
 def login(
