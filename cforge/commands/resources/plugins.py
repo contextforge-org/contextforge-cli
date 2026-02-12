@@ -16,7 +16,6 @@ Note:
 """
 
 # Standard
-from enum import Enum
 from typing import Any, Dict, Optional
 
 # Third-Party
@@ -24,6 +23,7 @@ import typer
 
 # First-Party
 from cforge.common import (
+    CaseInsensitiveEnum,
     AuthenticationError,
     CLIError,
     get_console,
@@ -34,27 +34,7 @@ from cforge.common import (
 )
 
 
-class _CaseInsensitiveEnum(str, Enum):
-    """Enum that supports case-insensitive parsing for CLI options."""
-
-    @classmethod
-    def _missing_(cls, value: object) -> Optional["_CaseInsensitiveEnum"]:
-        """Resolve unknown values by matching enum values case-insensitively.
-
-        Typer converts CLI strings into Enum members. Implementing `_missing_`
-        allows `--mode EnFoRcE` to resolve to `PluginMode.ENFORCE`, while still
-        rejecting unknown values.
-        """
-        if not isinstance(value, str):
-            return None
-        value_folded = value.casefold()
-        for member in cls:
-            if member.value.casefold() == value_folded:
-                return member
-        return None
-
-
-class PluginMode(_CaseInsensitiveEnum):
+class PluginMode(CaseInsensitiveEnum):
     """Valid plugin mode filters supported by the gateway admin API."""
 
     ENFORCE = "enforce"
@@ -62,21 +42,39 @@ class PluginMode(_CaseInsensitiveEnum):
     DISABLED = "disabled"
 
 
-def _handle_plugins_exception(exception: Exception) -> None:
+def _parse_plugin_mode(mode: Optional[str]) -> Optional[PluginMode]:
+    """Parse plugin mode with case-insensitive enum matching."""
+    if mode is None:
+        return None
+    try:
+        return PluginMode(mode)
+    except ValueError as exc:
+        choices = ", ".join(member.value for member in PluginMode)
+        raise CLIError(f"Invalid value for '--mode': {mode!r}. Must be one of: {choices}.") from exc
+
+
+def _handle_plugins_exception(exception: Exception, operation: str, plugin_name: Optional[str] = None) -> None:
     """Provide plugin-specific hints and raise a CLI error."""
     console = get_console()
 
     if isinstance(exception, AuthenticationError):
         console.print("[yellow]Access denied. Requires admin.plugins permission.[/yellow]")
-    elif isinstance(exception, CLIError) and "(404)" in str(exception):
-        console.print("[yellow]Admin plugin API unavailable. Ensure MCPGATEWAY_ADMIN_API_ENABLED=true and gateway version supports /admin/plugins.[/yellow]")
+    elif isinstance(exception, CLIError):
+        error_str = str(exception)
+        if "(404)" in error_str:
+            error_str_folded = error_str.casefold()
+            if operation == "get" and "plugin" in error_str_folded and "not found" in error_str_folded:
+                plugin_label = plugin_name or "requested plugin"
+                console.print(f"[yellow]Plugin not found: {plugin_label}[/yellow]")
+            else:
+                console.print("[yellow]Admin plugin API unavailable. Ensure MCPGATEWAY_ADMIN_API_ENABLED=true and gateway version supports /admin/plugins.[/yellow]")
 
     handle_exception(exception)
 
 
 def plugins_list(
     search: Optional[str] = typer.Option(None, "--search", help="Search by plugin name, description, or author"),
-    mode: Optional[PluginMode] = typer.Option(None, "--mode", help="Filter by mode"),
+    mode: Optional[str] = typer.Option(None, "--mode", help="Filter by mode"),
     hook: Optional[str] = typer.Option(None, "--hook", help="Filter by hook type"),
     tag: Optional[str] = typer.Option(None, "--tag", help="Filter by plugin tag"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
@@ -88,8 +86,9 @@ def plugins_list(
         params: Dict[str, Any] = {}
         if search:
             params["search"] = search
-        if mode:
-            params["mode"] = mode.value
+        parsed_mode = _parse_plugin_mode(mode)
+        if parsed_mode:
+            params["mode"] = parsed_mode.value
         if hook:
             params["hook"] = hook
         if tag:
@@ -108,7 +107,7 @@ def plugins_list(
                 console.print("[yellow]No plugins found[/yellow]")
 
     except Exception as e:
-        _handle_plugins_exception(e)
+        _handle_plugins_exception(e, operation="list")
 
 
 def plugins_get(
@@ -120,7 +119,7 @@ def plugins_get(
         print_json(result, f"Plugin {name}")
 
     except Exception as e:
-        _handle_plugins_exception(e)
+        _handle_plugins_exception(e, operation="get", plugin_name=name)
 
 
 def plugins_stats() -> None:
@@ -130,4 +129,4 @@ def plugins_stats() -> None:
         print_json(result, "Plugin Statistics")
 
     except Exception as e:
-        _handle_plugins_exception(e)
+        _handle_plugins_exception(e, operation="stats")

@@ -83,6 +83,8 @@ Here are some examples:
 cforge tools list [--mcp-server-id ID] [--json]
 cforge tools get <tool-id>
 cforge tools create [file.json]
+cforge tools execute <tool-id>                    # Interactive schema prompt
+cforge tools execute <tool-id> --data args.json   # Use JSON args file
 cforge tools toggle <tool-id>
 
 # Resources

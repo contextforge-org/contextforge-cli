@@ -8,6 +8,7 @@ Common utilities for Context Forge CLI.
 """
 
 # Standard
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -70,6 +71,21 @@ class CLIError(Exception):
 
 class AuthenticationError(CLIError):
     """Raised when authentication fails."""
+
+
+class CaseInsensitiveEnum(str, Enum):
+    """Enum that supports case-insensitive parsing for CLI options."""
+
+    @classmethod
+    def _missing_(cls, value: object) -> Optional["CaseInsensitiveEnum"]:
+        """Resolve unknown values by matching enum values case-insensitively."""
+        if not isinstance(value, str):
+            return None
+        value_folded = value.casefold()
+        for member in cls:
+            if member.value.casefold() == value_folded:
+                return member
+        return None
 
 
 def split_exception_details(exception: Exception) -> Tuple[str, Any]:
@@ -362,7 +378,7 @@ def print_table(
 _INT_SENTINEL_DEFAULT = -4231415
 
 
-def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = None, indent: str = "") -> Dict[str, Any]:
+def prompt_for_schema(schema_class: type[BaseModel], prefilled: Optional[Dict[str, Any]] = None, indent: str = "") -> Dict[str, Any]:
     """Interactively prompt user for fields based on a Pydantic schema.
 
     Args:
@@ -511,3 +527,392 @@ def prompt_for_schema(schema_class: type, prefilled: Optional[Dict[str, Any]] = 
                 raise CLIError(f"Field '{field_name}' is required")
 
     return data
+
+
+def prompt_for_json_schema(
+    schema: Dict[str, Any],
+    prefilled: Optional[Dict[str, Any]] = None,
+    indent: str = "",
+    prompt_optional: bool = True,
+) -> Dict[str, Any]:
+    """Interactively prompt user for fields based on a JSON Schema object.
+
+    Args:
+        schema: JSON Schema dictionary describing expected input shape
+        prefilled: Optional dictionary with pre-filled values
+        indent: Indentation string for nested fields
+        prompt_optional: If False, prompt only for missing required fields
+
+    Returns:
+        Dictionary with prompted values merged into prefilled values
+    """
+
+    def _format_indent(indt: str) -> str:
+        """Render indentation in a dim style for readability."""
+        return f"[dim]{indt}[/dim]" if indt else indt
+
+    def _next_indent(indt: str) -> str:
+        """Return next indentation level."""
+        if not indt:
+            return "|-"
+        return f"{indt}-"
+
+    def _resolve_json_pointer(ref: str) -> Dict[str, Any]:
+        """Resolve a local JSON Pointer reference against the root schema."""
+        if not ref.startswith("#/"):
+            raise CLIError(f"Only local schema references are supported: {ref}")
+
+        pointer_tokens = ref[2:].split("/")
+        current: Any = schema
+
+        for raw_token in pointer_tokens:
+            token = raw_token.replace("~1", "/").replace("~0", "~")
+
+            if isinstance(current, dict):
+                if token not in current:
+                    raise CLIError(f"Schema reference not found: {ref}")
+                current = current[token]
+                continue
+
+            if isinstance(current, list):
+                try:
+                    index = int(token)
+                except ValueError:
+                    raise CLIError(f"Invalid array index in schema reference: {ref}")
+                if index < 0 or index >= len(current):
+                    raise CLIError(f"Schema reference index out of bounds: {ref}")
+                current = current[index]
+                continue
+
+            raise CLIError(f"Schema reference path is invalid: {ref}")
+
+        if not isinstance(current, dict):
+            raise CLIError(f"Schema reference does not resolve to an object schema: {ref}")
+
+        return current
+
+    def _resolve_ref_schema(field_schema: Dict[str, Any], resolving: Tuple[str, ...] = ()) -> Dict[str, Any]:
+        """Resolve $ref in schema and merge sibling keys as overrides."""
+        if not isinstance(field_schema, dict):
+            return {}
+
+        ref_value = field_schema.get("$ref")
+        if not isinstance(ref_value, str):
+            return field_schema
+
+        if ref_value in resolving:
+            ref_chain = " -> ".join([*resolving, ref_value])
+            raise CLIError(f"Cyclic schema reference detected: {ref_chain}")
+
+        resolved_schema = _resolve_ref_schema(_resolve_json_pointer(ref_value), resolving + (ref_value,))
+        merged_schema = resolved_schema.copy()
+        merged_schema.update({k: v for k, v in field_schema.items() if k != "$ref"})
+        return merged_schema
+
+    def _resolve_schema_type(field_schema: Dict[str, Any]) -> str:
+        """Resolve schema type from JSON Schema type fields and hints."""
+        field_schema = _resolve_ref_schema(field_schema)
+        raw_type = field_schema.get("type")
+        if isinstance(raw_type, str):
+            return raw_type
+        if isinstance(raw_type, list):
+            valid_types = [item for item in raw_type if isinstance(item, str)]
+            non_null_types = [item for item in valid_types if item != "null"]
+            if non_null_types:
+                return non_null_types[0]
+            if "null" in valid_types:
+                return "null"
+        if isinstance(field_schema.get("properties"), dict):
+            return "object"
+        if "required" in field_schema:
+            return "object"
+        if isinstance(field_schema.get("items"), dict):
+            return "array"
+        if isinstance(field_schema.get("enum"), list):
+            return "string"
+        return "string"
+
+    def _as_schema_dict(value: Any) -> Dict[str, Any]:
+        """Return a schema dictionary, coercing unknown values to an empty schema."""
+        return value if isinstance(value, dict) else {}
+
+    def _prompt_text(field_name: str, field_schema: Dict[str, Any], is_required: bool) -> str:
+        """Build prompt text for a field."""
+        description = field_schema.get("description")
+        default = field_schema.get("default")
+        prompt_text = field_name
+        if isinstance(description, str) and description and description != field_name:
+            prompt_text += f" ({description})"
+        if default not in (None, ""):
+            prompt_text += f" [default: {default}]"
+        if not is_required:
+            prompt_text += " [optional]"
+        return prompt_text
+
+    if not isinstance(schema, dict):
+        raise CLIError("Input schema must be a JSON object")
+
+    resolved_root_schema = _resolve_ref_schema(schema)
+    _MISSING = object()
+    console = get_console()
+    formatted_indent = _format_indent(indent)
+    display_name = resolved_root_schema.get("title", "Tool Arguments")
+    if not isinstance(display_name, str) or not display_name:
+        display_name = "Tool Arguments"
+
+    console.print(f"\n{formatted_indent}[bold cyan]Creating {display_name}[/bold cyan]")
+    if prompt_optional:
+        console.print(f"{formatted_indent}[dim]Press Enter to skip optional fields[/dim]\n{formatted_indent}")
+    else:
+        console.print(f"{formatted_indent}[dim]Prompting for missing required fields only[/dim]\n{formatted_indent}")
+
+    def _prompt_field_value(
+        field_name: str,
+        field_schema: Dict[str, Any],
+        is_required: bool,
+        field_indent: str,
+        prefilled_value: Any = _MISSING,
+    ) -> Tuple[Any, bool]:
+        """Prompt for a single field value.
+
+        Returns:
+            tuple[value, included] where included indicates if field should be set.
+        """
+        field_schema = _resolve_ref_schema(field_schema)
+        schema_type = _resolve_schema_type(field_schema)
+        formatted_field_indent = _format_indent(field_indent)
+        prompt_text = _prompt_text(field_name, field_schema, is_required)
+
+        if prefilled_value is not _MISSING:
+            if schema_type == "object" and isinstance(prefilled_value, dict):
+                console.print(f"{formatted_field_indent}[dim]{field_name}: (pre-filled object)[/dim]")
+                return _prompt_object(field_schema, prefilled=prefilled_value, object_indent=_next_indent(field_indent)), True
+            if schema_type == "array" and isinstance(prefilled_value, list):
+                console.print(f"{formatted_field_indent}[dim]{field_name}: (pre-filled array)[/dim]")
+                arr, include_arr = _prompt_array(field_name, field_schema, is_required, field_indent, prefilled=prefilled_value)
+                return arr, include_arr
+            console.print(f"{formatted_field_indent}[dim]{field_name}: {prefilled_value} (pre-filled)[/dim]")
+            return prefilled_value, True
+
+        if not is_required and not prompt_optional:
+            return None, False
+
+        enum_values = field_schema.get("enum")
+        if isinstance(enum_values, list) and enum_values:
+            enum_text = ", ".join(json.dumps(v) for v in enum_values)
+            console.print(f"{formatted_field_indent}{prompt_text} [choices: {enum_text}]", end="")
+
+            default_value = field_schema.get("default")
+            default_text = ""
+            show_default = False
+            if default_value is not None:
+                default_text = default_value if isinstance(default_value, str) else json.dumps(default_value)
+                show_default = True
+
+            raw_value = typer.prompt("", type=str, default=default_text, show_default=show_default)
+            if raw_value == "":
+                if is_required:
+                    raise CLIError(f"Field '{field_name}' is required")
+                return None, False
+
+            parsed_value: Any
+            try:
+                parsed_value = json.loads(raw_value)
+            except json.JSONDecodeError:
+                parsed_value = raw_value
+
+            if parsed_value in enum_values:
+                return parsed_value, True
+            if raw_value in enum_values:
+                return raw_value, True
+
+            raise CLIError(f"Field '{field_name}' must be one of: {enum_text}")
+
+        if schema_type == "object":
+            if not is_required and prompt_optional:
+                console.print(f"{formatted_field_indent}[dim]Include {field_name}?[/dim] ", end="")
+                if not typer.confirm("", default=False):
+                    return None, False
+            console.print(f"{formatted_field_indent}[yellow]{prompt_text}[/yellow]")
+            return _prompt_object(field_schema, prefilled=None, object_indent=_next_indent(field_indent)), True
+
+        if schema_type == "array":
+            return _prompt_array(field_name, field_schema, is_required, field_indent)
+
+        if schema_type == "boolean":
+            if not is_required and prompt_optional:
+                console.print(f"{formatted_field_indent}[dim]Include {field_name}?[/dim] ", end="")
+                if not typer.confirm("", default=False):
+                    return None, False
+            default_val = field_schema.get("default")
+            show_default = isinstance(default_val, bool)
+            bool_default = bool(default_val) if show_default else False
+            console.print(f"{formatted_field_indent}{prompt_text}", end="")
+            return typer.prompt("", default=bool_default, type=bool, show_default=show_default), True
+
+        if schema_type == "integer":
+            default_val = field_schema.get("default")
+            default_prompt: Any = "" if is_required else _INT_SENTINEL_DEFAULT
+            show_default = False
+            if isinstance(default_val, int):
+                default_prompt = default_val
+                show_default = True
+            console.print(f"{formatted_field_indent}{prompt_text}", end="")
+            value = typer.prompt("", type=int, default=default_prompt, show_default=show_default)
+            if value == _INT_SENTINEL_DEFAULT:
+                if is_required:
+                    raise CLIError(f"Field '{field_name}' is required")
+                return None, False
+            return value, True
+
+        if schema_type == "number":
+            default_val = field_schema.get("default")
+            default_text = ""
+            show_default = False
+            if isinstance(default_val, (int, float)):
+                default_text = str(float(default_val))
+                show_default = True
+            console.print(f"{formatted_field_indent}{prompt_text}", end="")
+            raw_value = typer.prompt("", type=str, default=default_text, show_default=show_default)
+            if raw_value == "":
+                if is_required:
+                    raise CLIError(f"Field '{field_name}' is required")
+                return None, False
+            try:
+                return float(raw_value), True
+            except ValueError:
+                raise CLIError(f"Field '{field_name}' must be a number")
+
+        if schema_type == "null":
+            return None, True
+
+        default_val = field_schema.get("default")
+        default_text = ""
+        show_default = False
+        if default_val is not None:
+            default_text = default_val if isinstance(default_val, str) else json.dumps(default_val)
+            show_default = True
+        console.print(f"{formatted_field_indent}{prompt_text}", end="")
+        value = typer.prompt("", type=str, default=default_text, show_default=show_default)
+        if value == "":
+            if is_required:
+                raise CLIError(f"Field '{field_name}' is required")
+            return None, False
+        return value, True
+
+    def _prompt_array(
+        field_name: str,
+        field_schema: Dict[str, Any],
+        is_required: bool,
+        field_indent: str,
+        prefilled: Optional[List[Any]] = None,
+    ) -> Tuple[List[Any], bool]:
+        """Prompt for array values."""
+        field_schema = _resolve_ref_schema(field_schema)
+        formatted_field_indent = _format_indent(field_indent)
+        item_schema = _resolve_ref_schema(_as_schema_dict(field_schema.get("items")))
+        include_field = is_required
+
+        if prefilled is None and not is_required and prompt_optional:
+            console.print(f"{formatted_field_indent}[dim]Include {field_name}?[/dim] ", end="")
+            if not typer.confirm("", default=False):
+                return [], False
+            include_field = True
+
+        values: List[Any] = []
+
+        if prefilled is not None:
+            item_type = _resolve_schema_type(item_schema)
+            nested_indent = _next_indent(field_indent)
+            for idx, entry in enumerate(prefilled):
+                if item_type == "object" and isinstance(entry, dict):
+                    values.append(_prompt_object(item_schema, prefilled=entry, object_indent=nested_indent))
+                elif item_type == "array" and isinstance(entry, list):
+                    nested_values, _ = _prompt_array(f"{field_name}[{idx}]", item_schema, is_required=True, field_indent=nested_indent, prefilled=entry)
+                    values.append(nested_values)
+                else:
+                    values.append(entry)
+            return values, True
+
+        nested_indent = _next_indent(field_indent)
+        while True:
+            console.print(f"{formatted_field_indent}[dim]Add an entry to {field_name}?[/dim] ", end="")
+            if not typer.confirm("", default=False):
+                break
+            entry, include_entry = _prompt_field_value("item", item_schema, is_required=True, field_indent=nested_indent)
+            if include_entry:
+                values.append(entry)
+
+        if values:
+            return values, True
+        if include_field or is_required:
+            return [], True
+        return [], False
+
+    def _prompt_object(field_schema: Dict[str, Any], prefilled: Optional[Dict[str, Any]], object_indent: str) -> Dict[str, Any]:
+        """Prompt for object fields recursively."""
+        field_schema = _resolve_ref_schema(field_schema)
+        data = prefilled.copy() if prefilled else {}
+        properties = field_schema.get("properties")
+        required = field_schema.get("required")
+        properties_dict = properties if isinstance(properties, dict) else {}
+        required_fields = {field for field in required if isinstance(field, str)} if isinstance(required, list) else set()
+
+        for field_name, field_details in properties_dict.items():
+            field_def = _resolve_ref_schema(_as_schema_dict(field_details))
+            has_prefilled = field_name in data
+            current_value = data[field_name] if has_prefilled else _MISSING
+            value, include_value = _prompt_field_value(
+                field_name=field_name,
+                field_schema=field_def,
+                is_required=field_name in required_fields,
+                field_indent=object_indent,
+                prefilled_value=current_value,
+            )
+            if include_value:
+                data[field_name] = value
+            if field_name in required_fields and field_name not in data:
+                raise CLIError(f"Field '{field_name}' is required")
+
+        additional_properties = field_schema.get("additionalProperties")
+        if isinstance(additional_properties, dict) and prompt_optional:
+            additional_properties_schema = _resolve_ref_schema(additional_properties)
+            while True:
+                formatted_object_indent = _format_indent(object_indent)
+                next_indent = _next_indent(object_indent)
+                formatted_next_indent = _format_indent(next_indent)
+                console.print(f"{formatted_object_indent}[dim]Add an extra field?[/dim] ", end="")
+                if not typer.confirm("", default=False):
+                    break
+                console.print(f"{formatted_next_indent}Enter key", end="")
+                key = typer.prompt("", type=str)
+                value, include_value = _prompt_field_value(key, additional_properties_schema, is_required=True, field_indent=next_indent)
+                if include_value:
+                    data[key] = value
+        elif additional_properties is True and prompt_optional:
+            while True:
+                formatted_object_indent = _format_indent(object_indent)
+                next_indent = _next_indent(object_indent)
+                formatted_next_indent = _format_indent(next_indent)
+                console.print(f"{formatted_object_indent}[dim]Add an extra field?[/dim] ", end="")
+                if not typer.confirm("", default=False):
+                    break
+                console.print(f"{formatted_next_indent}Enter key", end="")
+                key = typer.prompt("", type=str)
+                console.print(f"{formatted_next_indent}Enter JSON value", end="")
+                raw_value = typer.prompt("", type=str)
+                try:
+                    data[key] = json.loads(raw_value)
+                except json.JSONDecodeError:
+                    data[key] = raw_value
+
+        return data
+
+    root_type = _resolve_schema_type(resolved_root_schema)
+    if root_type != "object":
+        raise CLIError("Input schema must be an object schema")
+
+    if prefilled is not None and not isinstance(prefilled, dict):
+        raise CLIError("Prefilled input must be a JSON object")
+
+    return _prompt_object(resolved_root_schema, prefilled=prefilled, object_indent=indent)

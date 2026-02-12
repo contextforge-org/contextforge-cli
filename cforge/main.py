@@ -50,6 +50,7 @@ from cforge.commands.resources.tools import (
     tools_update,
     tools_delete,
     tools_toggle,
+    tools_execute,
 )
 from cforge.commands.resources.resources import (
     resources_list,
@@ -160,6 +161,7 @@ tools_app.command("create")(tools_create)
 tools_app.command("update")(tools_update)
 tools_app.command("delete")(tools_delete)
 tools_app.command("toggle")(tools_toggle)
+tools_app.command("execute")(tools_execute)
 
 # ---------------------------------------------------------------------------
 # Resources command group

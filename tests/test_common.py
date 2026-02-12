@@ -36,6 +36,7 @@ from cforge.common import (
     make_authenticated_request,
     print_json,
     print_table,
+    prompt_for_json_schema,
     prompt_for_schema,
     save_token,
 )
@@ -1127,6 +1128,243 @@ class TestPromptForSchema:
         with patch("typer.prompt", return_value=""):
             with pytest.raises(CLIError):
                 prompt_for_schema(TestSchema)
+
+
+class TestPromptForJsonSchema:
+    """Tests for prompt_for_json_schema function."""
+
+    def test_prompt_for_json_schema_required_only_with_prefilled(self, mock_console) -> None:
+        """Test prompting only missing required fields when prefilled data exists."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer"},
+            },
+            "required": ["query"],
+        }
+        prefilled = {"limit": 10}
+
+        with patch("typer.prompt", return_value="search term") as mock_prompt:
+            result = prompt_for_json_schema(schema, prefilled=prefilled, prompt_optional=False)
+
+        assert result["query"] == "search term"
+        assert result["limit"] == 10
+        assert mock_prompt.call_count == 1
+
+    def test_prompt_for_json_schema_skips_optional_fields_when_required_only(self, mock_console) -> None:
+        """Test optional fields are skipped entirely in required-only mode."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+            },
+        }
+
+        with patch("typer.prompt") as mock_prompt:
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {}
+        mock_prompt.assert_not_called()
+
+    def test_prompt_for_json_schema_prompts_optional_fields(self, mock_console) -> None:
+        """Test optional fields are prompted in full interactive mode."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+            },
+        }
+
+        with patch("typer.prompt", return_value="search term"):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result["query"] == "search term"
+
+    def test_prompt_for_json_schema_prefilled_nested_object_prompts_missing_required(self, mock_console) -> None:
+        """Test nested required fields are prompted when parent object is prefilled."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "timeout": {"type": "integer"},
+                    },
+                    "required": ["name"],
+                }
+            },
+            "required": ["config"],
+        }
+        prefilled = {"config": {"timeout": 30}}
+
+        with patch("typer.prompt", return_value="tool-name") as mock_prompt:
+            result = prompt_for_json_schema(schema, prefilled=prefilled, prompt_optional=False)
+
+        assert result == {"config": {"timeout": 30, "name": "tool-name"}}
+        assert mock_prompt.call_count == 1
+
+    def test_prompt_for_json_schema_requires_object_schema(self, mock_console) -> None:
+        """Test non-object root schema raises a CLIError."""
+        schema = {"type": "string"}
+
+        with pytest.raises(CLIError):
+            prompt_for_json_schema(schema)
+
+    def test_prompt_for_json_schema_resolves_ref_object(self, mock_console) -> None:
+        """Test object fields referenced via $ref are prompted as objects."""
+        schema = {
+            "type": "object",
+            "$defs": {
+                "NestedArgs": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                    },
+                    "required": ["name"],
+                }
+            },
+            "properties": {
+                "config": {"$ref": "#/$defs/NestedArgs"},
+            },
+            "required": ["config"],
+        }
+
+        with patch("typer.prompt", return_value="nested-name") as mock_prompt:
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"config": {"name": "nested-name"}}
+        assert mock_prompt.call_count == 1
+
+    def test_prompt_for_json_schema_resolves_ref_array(self, mock_console) -> None:
+        """Test array fields referenced via $ref are prompted as arrays."""
+        schema = {
+            "type": "object",
+            "$defs": {
+                "TagList": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                }
+            },
+            "properties": {
+                "tags": {"$ref": "#/$defs/TagList"},
+            },
+            "required": ["tags"],
+        }
+
+        with patch("typer.confirm", side_effect=[True, True, False]), patch("typer.prompt", side_effect=["one", "two"]):
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"tags": ["one", "two"]}
+
+    def test_prompt_for_json_schema_missing_ref_raises(self, mock_console) -> None:
+        """Test missing local $ref path raises a CLIError."""
+        schema = {
+            "type": "object",
+            "$defs": {},
+            "properties": {
+                "config": {"$ref": "#/$defs/DoesNotExist"},
+            },
+            "required": ["config"],
+        }
+
+        with pytest.raises(CLIError, match="Schema reference not found"):
+            prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_external_ref_raises(self, mock_console) -> None:
+        """Test non-local $ref values are rejected."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "config": {"$ref": "https://example.com/schema.json#/$defs/Config"},
+            },
+            "required": ["config"],
+        }
+
+        with pytest.raises(CLIError, match="Only local schema references are supported"):
+            prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_cyclic_ref_raises(self, mock_console) -> None:
+        """Test cyclic $ref graphs raise a CLIError."""
+        schema = {
+            "type": "object",
+            "$defs": {
+                "Node": {"$ref": "#/$defs/Node"},
+            },
+            "properties": {
+                "node": {"$ref": "#/$defs/Node"},
+            },
+            "required": ["node"],
+        }
+
+        with pytest.raises(CLIError, match="Cyclic schema reference detected"):
+            prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_non_object_input_schema_raises(self, mock_console) -> None:
+        """Test non-dictionary schemas are rejected."""
+        with pytest.raises(CLIError, match="Input schema must be a JSON object"):
+            prompt_for_json_schema(["not", "an", "object"])  # type: ignore[arg-type]
+
+    def test_prompt_for_json_schema_non_object_prefilled_raises(self, mock_console) -> None:
+        """Test non-dictionary prefilled payloads are rejected."""
+        schema = {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+        }
+
+        with pytest.raises(CLIError, match="Prefilled input must be a JSON object"):
+            prompt_for_json_schema(schema, prefilled=["bad"])  # type: ignore[arg-type]
+
+    def test_prompt_for_json_schema_ref_resolving_to_scalar_raises(self, mock_console) -> None:
+        """Test $ref pointers resolving to scalar nodes are rejected."""
+        schema = {
+            "type": "object",
+            "$defs": {
+                "Config": {
+                    "type": "object",
+                    "properties": {"kind": {"type": "string"}},
+                }
+            },
+            "properties": {
+                "config": {"$ref": "#/$defs/Config/type"},
+            },
+            "required": ["config"],
+        }
+
+        with pytest.raises(CLIError, match="does not resolve to an object schema"):
+            prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_ref_invalid_array_index_raises(self, mock_console) -> None:
+        """Test invalid array indexes in local $ref pointers are rejected."""
+        schema = {
+            "type": "object",
+            "$defs": {
+                "Variants": [{"type": "string"}],
+            },
+            "properties": {
+                "value": {"$ref": "#/$defs/Variants/not-an-index"},
+            },
+            "required": ["value"],
+        }
+
+        with pytest.raises(CLIError, match="Invalid array index in schema reference"):
+            prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_handles_nullable_integer_type_lists(self, mock_console) -> None:
+        """Test `type` lists like [null, integer] prompt using the concrete type."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "limit": {"type": ["null", "integer"]},
+            },
+            "required": ["limit"],
+        }
+
+        with patch("typer.prompt", return_value=7):
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"limit": 7}
 
 
 class TestTokenFilePermissions:
