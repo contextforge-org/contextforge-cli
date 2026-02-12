@@ -593,7 +593,7 @@ def prompt_for_json_schema(
 
     def _resolve_ref_schema(field_schema: Dict[str, Any], resolving: Tuple[str, ...] = ()) -> Dict[str, Any]:
         """Resolve $ref in schema and merge sibling keys as overrides."""
-        if not isinstance(field_schema, dict):
+        if not isinstance(field_schema, dict):  # pragma: no cover - defensive guard
             return {}
 
         ref_value = field_schema.get("$ref")
@@ -840,14 +840,14 @@ def prompt_for_json_schema(
             if not typer.confirm("", default=False):
                 break
             entry, include_entry = _prompt_field_value("item", item_schema, is_required=True, field_indent=nested_indent)
-            if include_entry:
+            if include_entry:  # pragma: no branch - required items are either included or raise
                 values.append(entry)
 
         if values:
             return values, True
         if include_field or is_required:
             return [], True
-        return [], False
+        return [], False  # pragma: no cover - optional arrays are skipped earlier when not included
 
     def _prompt_object(field_schema: Dict[str, Any], prefilled: Optional[Dict[str, Any]], object_indent: str) -> Dict[str, Any]:
         """Prompt for object fields recursively."""
@@ -872,7 +872,7 @@ def prompt_for_json_schema(
             if include_value:
                 data[field_name] = value
             if field_name in required_fields and field_name not in data:
-                raise CLIError(f"Field '{field_name}' is required")
+                raise CLIError(f"Field '{field_name}' is required")  # pragma: no cover - required field prompts already enforce this
 
         additional_properties = field_schema.get("additionalProperties")
         if isinstance(additional_properties, dict) and prompt_optional:
@@ -887,7 +887,7 @@ def prompt_for_json_schema(
                 console.print(f"{formatted_next_indent}Enter key", end="")
                 key = typer.prompt("", type=str)
                 value, include_value = _prompt_field_value(key, additional_properties_schema, is_required=True, field_indent=next_indent)
-                if include_value:
+                if include_value:  # pragma: no branch - required additional fields are either included or raise
                     data[key] = value
         elif additional_properties is True and prompt_optional:
             while True:

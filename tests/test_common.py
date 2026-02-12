@@ -1366,6 +1366,579 @@ class TestPromptForJsonSchema:
 
         assert result == {"limit": 7}
 
+    def test_prompt_for_json_schema_ref_index_out_of_bounds_raises(self, mock_console) -> None:
+        """Test out-of-bounds array indexes in local $ref pointers are rejected."""
+        schema = {
+            "type": "object",
+            "$defs": {
+                "Variants": [{"type": "string"}],
+            },
+            "properties": {
+                "value": {"$ref": "#/$defs/Variants/1"},
+            },
+            "required": ["value"],
+        }
+
+        with pytest.raises(CLIError, match="Schema reference index out of bounds"):
+            prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_ref_valid_array_index_resolves(self, mock_console) -> None:
+        """Test valid array indexes in local $ref pointers resolve correctly."""
+        schema = {
+            "type": "object",
+            "$defs": {
+                "Variants": [
+                    {
+                        "type": "object",
+                        "properties": {"name": {"type": "string"}},
+                        "required": ["name"],
+                    }
+                ],
+            },
+            "properties": {
+                "value": {"$ref": "#/$defs/Variants/0"},
+            },
+            "required": ["value"],
+        }
+
+        with patch("typer.prompt", return_value="selected"):
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"value": {"name": "selected"}}
+
+    def test_prompt_for_json_schema_ref_path_invalid_raises(self, mock_console) -> None:
+        """Test local $ref traversal fails on invalid scalar path traversal."""
+        schema = {
+            "type": "object",
+            "$defs": {
+                "Scalar": 1,
+            },
+            "properties": {
+                "value": {"$ref": "#/$defs/Scalar/child"},
+            },
+            "required": ["value"],
+        }
+
+        with pytest.raises(CLIError, match="Schema reference path is invalid"):
+            prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_nested_with_non_empty_indent(self, mock_console) -> None:
+        """Test nested prompting works with a non-empty root indent."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                    },
+                    "required": ["name"],
+                }
+            },
+            "required": ["config"],
+        }
+
+        with patch("typer.prompt", return_value="nested-name"):
+            result = prompt_for_json_schema(schema, indent="|", prompt_optional=False)
+
+        assert result == {"config": {"name": "nested-name"}}
+
+    def test_prompt_for_json_schema_fallback_title_and_prompt_text_metadata(self, mock_console) -> None:
+        """Test fallback display title and prompt metadata formatting branches."""
+        schema = {
+            "type": "object",
+            "title": 123,
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query",
+                    "default": "seed",
+                }
+            },
+            "required": ["query"],
+        }
+
+        with patch("typer.prompt", return_value="manual"):
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"query": "manual"}
+
+    def test_prompt_for_json_schema_optional_object_decline(self, mock_console) -> None:
+        """Test optional object fields can be skipped."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "properties": {
+                        "name": {"type": "string"},
+                    },
+                }
+            },
+        }
+
+        with patch("typer.confirm", return_value=False):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {}
+
+    def test_prompt_for_json_schema_optional_object_included(self, mock_console) -> None:
+        """Test optional object fields can be included and prompted."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                    },
+                    "required": ["name"],
+                }
+            },
+        }
+
+        with patch("typer.confirm", return_value=True), patch("typer.prompt", return_value="chosen"):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {"config": {"name": "chosen"}}
+
+    def test_prompt_for_json_schema_object_inferred_from_required_keyword(self, mock_console) -> None:
+        """Test object type inference from `required` when `type` is missing."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "meta": {
+                    "required": ["id"],
+                }
+            },
+            "required": ["meta"],
+        }
+
+        result = prompt_for_json_schema(schema, prompt_optional=False)
+        assert result == {"meta": {}}
+
+    def test_prompt_for_json_schema_optional_array_inferred_and_declined(self, mock_console) -> None:
+        """Test optional arrays inferred from `items` can be skipped."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "items": {"type": "string"},
+                }
+            },
+        }
+
+        with patch("typer.confirm", return_value=False):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {}
+
+    def test_prompt_for_json_schema_type_list_non_string_falls_back_to_items(self, mock_console) -> None:
+        """Test non-string type list values fall back to schema-shape inference."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": [1],
+                    "items": {"type": "string"},
+                }
+            },
+        }
+
+        with patch("typer.confirm", return_value=False):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {}
+
+    def test_prompt_for_json_schema_optional_array_include_no_entries(self, mock_console) -> None:
+        """Test optional arrays can be included with no entries."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                }
+            },
+        }
+
+        with patch("typer.confirm", side_effect=[True, False]):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {"tags": []}
+
+    def test_prompt_for_json_schema_optional_array_collects_multiple_entries(self, mock_console) -> None:
+        """Test array entry prompting loops correctly for multiple values."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                }
+            },
+        }
+
+        with patch("typer.confirm", side_effect=[True, True, True, False]), patch("typer.prompt", side_effect=[1, 2]):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {"tags": [1, 2]}
+
+    def test_prompt_for_json_schema_prefilled_array_of_objects_and_scalars(self, mock_console) -> None:
+        """Test prefilled object-array entries recurse for objects and passthrough other values."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"name": {"type": "string"}},
+                        "required": ["name"],
+                    },
+                }
+            },
+            "required": ["rows"],
+        }
+        prefilled = {"rows": [{"name": "row-one"}, "raw-entry"]}
+
+        result = prompt_for_json_schema(schema, prefilled=prefilled, prompt_optional=False)
+        assert result == prefilled
+
+    def test_prompt_for_json_schema_prefilled_array_of_arrays(self, mock_console) -> None:
+        """Test prefilled nested arrays recurse through nested item schemas."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "matrix": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                    },
+                }
+            },
+            "required": ["matrix"],
+        }
+        prefilled = {"matrix": [[1, 2], 3]}
+
+        result = prompt_for_json_schema(schema, prefilled=prefilled, prompt_optional=False)
+        assert result == prefilled
+
+    def test_prompt_for_json_schema_enum_uses_raw_string_match(self, mock_console) -> None:
+        """Test enum prompts accept raw values when JSON parsing changes type."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "enum": ["1"],
+                    "default": "1",
+                }
+            },
+            "required": ["mode"],
+        }
+
+        with patch("typer.prompt", return_value="1"):
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"mode": "1"}
+
+    def test_prompt_for_json_schema_enum_uses_json_parsed_match(self, mock_console) -> None:
+        """Test enum prompts accept values that match after JSON parsing."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "priority": {
+                    "enum": [1, 2],
+                }
+            },
+            "required": ["priority"],
+        }
+
+        with patch("typer.prompt", return_value="1"):
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"priority": 1}
+
+    def test_prompt_for_json_schema_optional_enum_blank_is_skipped(self, mock_console) -> None:
+        """Test optional enum fields are skipped when left blank."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "mode": {"enum": ["enforce", "disabled"]},
+            },
+        }
+
+        with patch("typer.prompt", return_value=""):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {}
+
+    def test_prompt_for_json_schema_required_enum_blank_raises(self, mock_console) -> None:
+        """Test required enum fields reject blank values."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "mode": {"enum": ["enforce", "disabled"]},
+            },
+            "required": ["mode"],
+        }
+
+        with patch("typer.prompt", return_value=""):
+            with pytest.raises(CLIError, match="Field 'mode' is required"):
+                prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_invalid_enum_value_raises(self, mock_console) -> None:
+        """Test invalid enum values raise a clear error."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "mode": {"enum": ["enforce", "disabled"]},
+            },
+            "required": ["mode"],
+        }
+
+        with patch("typer.prompt", return_value="invalid"):
+            with pytest.raises(CLIError, match="must be one of"):
+                prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_optional_boolean_include_and_prompt(self, mock_console) -> None:
+        """Test optional booleans prompt when included."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "default": True,
+                }
+            },
+        }
+
+        with patch("typer.confirm", return_value=True), patch("typer.prompt", return_value=False):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {"enabled": False}
+
+    def test_prompt_for_json_schema_optional_boolean_decline(self, mock_console) -> None:
+        """Test optional booleans can be skipped by declining inclusion."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                }
+            },
+        }
+
+        with patch("typer.confirm", return_value=False):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {}
+
+    def test_prompt_for_json_schema_required_boolean_prompts_directly(self, mock_console) -> None:
+        """Test required booleans prompt without inclusion confirmation."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                }
+            },
+            "required": ["enabled"],
+        }
+
+        with patch("typer.prompt", return_value=True):
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"enabled": True}
+
+    def test_prompt_for_json_schema_integer_with_default(self, mock_console) -> None:
+        """Test integer prompts with integer defaults."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "default": 3,
+                }
+            },
+            "required": ["count"],
+        }
+
+        with patch("typer.prompt", return_value=7):
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"count": 7}
+
+    def test_prompt_for_json_schema_required_integer_sentinel_raises(self, mock_console) -> None:
+        """Test required integers reject sentinel-equivalent empty values."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer"},
+            },
+            "required": ["count"],
+        }
+
+        with patch("typer.prompt", return_value=_INT_SENTINEL_DEFAULT):
+            with pytest.raises(CLIError, match="Field 'count' is required"):
+                prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_optional_integer_sentinel_is_skipped(self, mock_console) -> None:
+        """Test optional integers are skipped when sentinel-equivalent value is returned."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer"},
+            },
+        }
+
+        with patch("typer.prompt", return_value=_INT_SENTINEL_DEFAULT):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {}
+
+    def test_prompt_for_json_schema_number_with_default(self, mock_console) -> None:
+        """Test number prompts parse float values and respect defaults."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "score": {
+                    "type": "number",
+                    "default": 1.5,
+                }
+            },
+            "required": ["score"],
+        }
+
+        with patch("typer.prompt", return_value="2.25"):
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"score": 2.25}
+
+    def test_prompt_for_json_schema_required_number_blank_raises(self, mock_console) -> None:
+        """Test required numbers reject blank input."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "score": {"type": "number"},
+            },
+            "required": ["score"],
+        }
+
+        with patch("typer.prompt", return_value=""):
+            with pytest.raises(CLIError, match="Field 'score' is required"):
+                prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_optional_number_blank_is_skipped(self, mock_console) -> None:
+        """Test optional numbers are skipped when blank input is provided."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "score": {"type": "number"},
+            },
+        }
+
+        with patch("typer.prompt", return_value=""):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {}
+
+    def test_prompt_for_json_schema_invalid_number_raises(self, mock_console) -> None:
+        """Test invalid numeric input raises a number-specific error."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "score": {"type": "number"},
+            },
+            "required": ["score"],
+        }
+
+        with patch("typer.prompt", return_value="not-a-number"):
+            with pytest.raises(CLIError, match="Field 'score' must be a number"):
+                prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_nullable_type_list_with_only_null(self, mock_console) -> None:
+        """Test union-like type lists containing only null resolve to None."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "empty_value": {"type": ["null"]},
+            },
+            "required": ["empty_value"],
+        }
+
+        result = prompt_for_json_schema(schema, prompt_optional=False)
+        assert result == {"empty_value": None}
+
+    def test_prompt_for_json_schema_string_default_non_string_value(self, mock_console) -> None:
+        """Test string-like fallback prompts render non-string defaults."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "payload": {
+                    "default": {"kind": "map"},
+                }
+            },
+            "required": ["payload"],
+        }
+
+        with patch("typer.prompt", return_value='{"ok":true}'):
+            result = prompt_for_json_schema(schema, prompt_optional=False)
+
+        assert result == {"payload": '{"ok":true}'}
+
+    def test_prompt_for_json_schema_required_fallback_string_blank_raises(self, mock_console) -> None:
+        """Test required fallback string fields reject blank input."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {},
+            },
+            "required": ["name"],
+        }
+
+        with patch("typer.prompt", return_value=""):
+            with pytest.raises(CLIError, match="Field 'name' is required"):
+                prompt_for_json_schema(schema, prompt_optional=False)
+
+    def test_prompt_for_json_schema_optional_fallback_string_blank_is_skipped(self, mock_console) -> None:
+        """Test optional fallback string fields are skipped when blank."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {},
+            },
+        }
+
+        with patch("typer.prompt", return_value=""):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {}
+
+    def test_prompt_for_json_schema_additional_properties_schema(self, mock_console) -> None:
+        """Test `additionalProperties` schema prompts for typed extra fields."""
+        schema = {
+            "type": "object",
+            "additionalProperties": {"type": "integer"},
+        }
+
+        with patch("typer.confirm", side_effect=[True, False]), patch("typer.prompt", side_effect=["max_items", 10]):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {"max_items": 10}
+
+    def test_prompt_for_json_schema_additional_properties_true_json_and_raw(self, mock_console) -> None:
+        """Test `additionalProperties: true` parses JSON and falls back to raw strings."""
+        schema = {
+            "type": "object",
+            "additionalProperties": True,
+        }
+
+        with patch("typer.confirm", side_effect=[True, True, False]), patch("typer.prompt", side_effect=["alpha", '{"nested": 1}', "beta", "raw-text"]):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {"alpha": {"nested": 1}, "beta": "raw-text"}
+
 
 class TestTokenFilePermissions:
     """Tests for token file permission handling."""
