@@ -6,6 +6,7 @@ Authors: Gabe Goodhart
 
 Tests for configuration management.
 """
+
 # Standard
 from pathlib import Path
 from unittest import mock

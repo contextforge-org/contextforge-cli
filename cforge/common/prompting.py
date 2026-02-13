@@ -20,6 +20,7 @@ import typer
 
 from cforge.common.console import get_console
 from cforge.common.errors import CLIError
+from cforge.common.schema_validation import validate_instance, validate_instance_against_subschema
 
 _INT_SENTINEL_DEFAULT = -4231415
 
@@ -30,7 +31,7 @@ def _format_prompt_indent(indt: str) -> str:
 
 
 def _next_prompt_indent(indt: str) -> str:
-    """Return next indentation level."""
+    """Return the next indentation level."""
     if not indt:
         return "|-"
     return f"{indt}-"
@@ -57,13 +58,10 @@ def _build_prompt_text(
     return prompt_text
 
 
-def _prompt_include_field(console: Console, field_name: str, field_indent: str, dimmed: bool = True) -> bool:
+def _prompt_include_field(console: Console, field_name: str, field_indent: str) -> bool:
     """Prompt whether to include an optional field."""
     formatted_field_indent = _format_prompt_indent(field_indent)
-    if dimmed:
-        console.print(f"{formatted_field_indent}[dim]Include {field_name}?[/dim] ", end="")
-    else:
-        console.print(f"{formatted_field_indent}Include {field_name}?", end="")
+    console.print(f"{formatted_field_indent}[dim]Include {field_name}?[/dim] ", end="")
     return typer.confirm("", default=False)
 
 
@@ -264,9 +262,8 @@ def _resolve_ref_schema(root_schema: Dict[str, Any], field_schema: Dict[str, Any
     return merged_schema
 
 
-def _resolve_schema_type(root_schema: Dict[str, Any], field_schema: Dict[str, Any]) -> str:
-    """Resolve schema type from JSON Schema type fields and structural hints."""
-    field_schema = _resolve_ref_schema(root_schema, field_schema)
+def _infer_schema_type(field_schema: Dict[str, Any]) -> Optional[str]:
+    """Infer schema type from direct JSON Schema keywords."""
     raw_type = field_schema.get("type")
     if isinstance(raw_type, str):
         return raw_type
@@ -274,7 +271,10 @@ def _resolve_schema_type(root_schema: Dict[str, Any], field_schema: Dict[str, An
         valid_types = [item for item in raw_type if isinstance(item, str)]
         non_null_types = [item for item in valid_types if item != "null"]
         if non_null_types:
-            return non_null_types[0]
+            first_non_null_type = non_null_types[0]
+            if all(item == first_non_null_type for item in non_null_types):
+                return first_non_null_type
+            return "union"
         if "null" in valid_types:
             return "null"
     if isinstance(field_schema.get("properties"), dict):
@@ -285,6 +285,138 @@ def _resolve_schema_type(root_schema: Dict[str, Any], field_schema: Dict[str, An
         return "array"
     if isinstance(field_schema.get("enum"), list):
         return "string"
+    return None
+
+
+def _schema_contains_ref(field_schema: Dict[str, Any], target_ref: str, visited: Optional[set[int]] = None) -> bool:
+    """Return True when the schema tree contains the target local $ref."""
+    if not isinstance(field_schema, dict):
+        return False
+
+    if visited is None:
+        visited = set()
+    schema_id = id(field_schema)
+    if schema_id in visited:
+        return False
+    visited.add(schema_id)
+
+    ref_value = field_schema.get("$ref")
+    if isinstance(ref_value, str) and ref_value == target_ref:
+        return True
+
+    for value in field_schema.values():
+        if isinstance(value, dict) and _schema_contains_ref(value, target_ref, visited):
+            return True
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict) and _schema_contains_ref(item, target_ref, visited):
+                    return True
+    return False
+
+
+def _resolve_effective_schema(
+    root_schema: Dict[str, Any],
+    field_schema: Dict[str, Any],
+    resolving_refs: Tuple[str, ...] = (),
+    collapse_nullable: bool = True,
+) -> Dict[str, Any]:
+    """Resolve refs and collapse only nullable anyOf/oneOf schemas."""
+    if not isinstance(field_schema, dict):
+        return {}
+
+    ref_value = field_schema.get("$ref")
+    if isinstance(ref_value, str):
+        if ref_value in resolving_refs:
+            return field_schema
+        resolving_refs = (*resolving_refs, ref_value)
+
+    resolved_schema = _resolve_ref_schema(root_schema, field_schema)
+    if not collapse_nullable:
+        return resolved_schema
+
+    for combinator_key in ("anyOf", "oneOf"):
+        options = resolved_schema.get(combinator_key)
+        if not isinstance(options, list) or not options:
+            continue
+
+        resolved_options: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+        for option in options:
+            option_schema = _as_schema_dict(option)
+            resolved_option = _resolve_effective_schema(root_schema, option_schema, resolving_refs, collapse_nullable)
+            resolved_options.append((option_schema, resolved_option))
+
+        non_null_options: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+        has_null_option = False
+        for option_schema, resolved_option in resolved_options:
+            option_type = _resolve_schema_type(root_schema, resolved_option, resolving_refs)
+            if option_type == "null":
+                has_null_option = True
+                continue
+            non_null_options.append((option_schema, resolved_option))
+
+        if len(non_null_options) == 1 and (has_null_option or len(resolved_options) == 1):
+            selected_option, selected_resolved_option = non_null_options[0]
+            option_ref = selected_option.get("$ref")
+            if isinstance(option_ref, str) and _schema_contains_ref(selected_resolved_option, option_ref):
+                # Keep nullable wrapper so recursive schemas retain a terminating null path.
+                return resolved_schema
+
+            merged_schema = selected_resolved_option.copy()
+            merged_schema.update({key: value for key, value in resolved_schema.items() if key not in {"anyOf", "oneOf"}})
+            return merged_schema
+
+        return resolved_schema
+    return resolved_schema
+
+
+def _resolve_schema_type(
+    root_schema: Dict[str, Any],
+    field_schema: Dict[str, Any],
+    resolving_refs: Tuple[str, ...] = (),
+) -> str:
+    """Resolve schema type from JSON Schema type fields and structural hints."""
+    if not isinstance(field_schema, dict):
+        return "string"
+
+    ref_value = field_schema.get("$ref")
+    if isinstance(ref_value, str):
+        if ref_value in resolving_refs:
+            return "union"
+        resolving_refs = (*resolving_refs, ref_value)
+
+    field_schema = _resolve_ref_schema(root_schema, field_schema)
+    direct_type = _infer_schema_type(field_schema)
+    if direct_type is not None:
+        return direct_type
+
+    for combinator_key in ("anyOf", "oneOf"):
+        options = field_schema.get(combinator_key)
+        if not isinstance(options, list) or not options:
+            continue
+
+        option_results: List[Tuple[Dict[str, Any], str]] = []
+        for option in options:
+            option_schema = _as_schema_dict(option)
+            option_type = _resolve_schema_type(root_schema, option_schema, resolving_refs)
+            option_results.append((option_schema, option_type))
+
+        non_null_results = [(option_schema, option_type) for option_schema, option_type in option_results if option_type != "null"]
+        has_null_option = any(option_type == "null" for _, option_type in option_results)
+
+        if not non_null_results:
+            return "null"
+
+        if len(non_null_results) == 1:
+            non_null_option_schema, non_null_type = non_null_results[0]
+            option_ref = non_null_option_schema.get("$ref")
+            if has_null_option and isinstance(option_ref, str):
+                resolved_non_null_option = _resolve_ref_schema(root_schema, non_null_option_schema)
+                if _schema_contains_ref(resolved_non_null_option, option_ref):
+                    # Keep recursive nullable refs as union prompts to avoid auto-generating empty objects.
+                    return "union"
+            return non_null_type
+        return "union"
+
     return "string"
 
 
@@ -294,6 +426,7 @@ def _prompt_from_json_schema(
     indent: str = "",
     prompt_optional: bool = True,
     default_display_name: str = "Tool Arguments",
+    validate_payload: bool = True,
 ) -> Dict[str, Any]:
     """Prompt recursively from schema dictionaries shared by both public APIs."""
     if not isinstance(schema, dict):
@@ -301,7 +434,7 @@ def _prompt_from_json_schema(
     if prefilled is not None and not isinstance(prefilled, dict):
         raise CLIError("Prefilled input must be a JSON object")
 
-    resolved_root_schema = _resolve_ref_schema(schema, schema)
+    resolved_root_schema = _resolve_effective_schema(schema, schema)
     root_type = _resolve_schema_type(schema, resolved_root_schema)
     if root_type != "object":
         raise CLIError("Input schema must be an object schema")
@@ -331,7 +464,7 @@ def _prompt_from_json_schema(
         Returns:
             tuple[value, included] where included indicates if field should be set.
         """
-        field_schema = _resolve_ref_schema(schema, field_schema)
+        field_schema = _resolve_effective_schema(schema, field_schema)
         schema_type = _resolve_schema_type(schema, field_schema)
         formatted_field_indent = _format_prompt_indent(field_indent)
         include_falsy_default = field_schema.get("x-include-falsy-default")
@@ -344,6 +477,28 @@ def _prompt_from_json_schema(
             is_required=is_required,
             include_falsy_default=include_falsy_default,
         )
+
+        def _format_string_default(default_value: Any) -> Tuple[str, bool]:
+            if default_value is None:
+                return "", False
+            if isinstance(default_value, str):
+                return default_value, True
+            return json.dumps(default_value), True
+
+        def _prompt_string_with_default() -> Tuple[Optional[str], bool]:
+            default_text, show_default = _format_string_default(field_schema.get("default"))
+            value = _prompt_string_value(
+                console=console,
+                field_indent=field_indent,
+                prompt_text=prompt_text,
+                default=default_text,
+                show_default=show_default,
+            )
+            if value == "":
+                if is_required:
+                    raise CLIError(f"Field '{field_name}' is required")
+                return None, False
+            return value, True
 
         if prefilled_value is not _MISSING:
             if schema_type == "object" and isinstance(prefilled_value, dict):
@@ -464,22 +619,25 @@ def _prompt_from_json_schema(
         if schema_type == "null":
             return None, True
 
-        default_val = field_schema.get("default")
-        default_text = ""
-        show_default = False
-        if default_val is not None:
-            default_text = default_val if isinstance(default_val, str) else json.dumps(default_val)
-            show_default = True
-        value = _prompt_string_value(
-            console=console,
-            field_indent=field_indent,
-            prompt_text=prompt_text,
-            default=default_text,
-            show_default=show_default,
-        )
-        if value == "":
-            if is_required:
-                raise CLIError(f"Field '{field_name}' is required")
+        if schema_type == "union":
+            raw_value, include_raw = _prompt_string_with_default()
+            if not include_raw:
+                return None, False
+
+            parsed_value: Any
+            try:
+                parsed_value = json.loads(raw_value)
+            except json.JSONDecodeError:
+                parsed_value = raw_value
+
+            validation_error = validate_instance_against_subschema(schema, field_schema, parsed_value)
+            if validation_error is None:
+                return parsed_value, True
+
+            raise CLIError(f"Field '{field_name}' is invalid: {validation_error}")
+
+        value, include_value = _prompt_string_with_default()
+        if not include_value:
             return None, False
         return value, True
 
@@ -491,9 +649,9 @@ def _prompt_from_json_schema(
         prefilled: Optional[List[Any]] = None,
     ) -> Tuple[List[Any], bool]:
         """Prompt for array values."""
-        field_schema = _resolve_ref_schema(schema, field_schema)
+        field_schema = _resolve_effective_schema(schema, field_schema)
         formatted_field_indent = _format_prompt_indent(field_indent)
-        item_schema = _resolve_ref_schema(schema, _as_schema_dict(field_schema.get("items")))
+        item_schema = _resolve_effective_schema(schema, _as_schema_dict(field_schema.get("items")))
         include_field = is_required
         array_input_style = field_schema.get("x-array-input")
         skip_optional_prompt = bool(field_schema.get("x-array-skip-include-prompt", False))
@@ -532,9 +690,8 @@ def _prompt_from_json_schema(
             console.print(f"{formatted_field_indent}[dim]Add an entry to {field_name}?[/dim] ", end="")
             if not typer.confirm("", default=False):
                 break
-            entry, include_entry = _prompt_field_value("item", item_schema, is_required=True, field_indent=nested_indent)
-            if include_entry:
-                values.append(entry)
+            entry, _ = _prompt_field_value("item", item_schema, is_required=True, field_indent=nested_indent)
+            values.append(entry)
 
         if values:
             return values, True
@@ -560,7 +717,7 @@ def _prompt_from_json_schema(
 
     def _prompt_object(field_schema: Dict[str, Any], prefilled: Optional[Dict[str, Any]], object_indent: str) -> Dict[str, Any]:
         """Prompt for object fields recursively."""
-        field_schema = _resolve_ref_schema(schema, field_schema)
+        field_schema = _resolve_effective_schema(schema, field_schema)
         data = prefilled.copy() if prefilled else {}
         properties = field_schema.get("properties")
         required = field_schema.get("required")
@@ -568,7 +725,7 @@ def _prompt_from_json_schema(
         required_fields = {field for field in required if isinstance(field, str)} if isinstance(required, list) else set()
 
         for field_name, field_details in properties_dict.items():
-            field_def = _resolve_ref_schema(schema, _as_schema_dict(field_details))
+            field_def = _resolve_effective_schema(schema, _as_schema_dict(field_details))
             has_prefilled = field_name in data
             current_value = data[field_name] if has_prefilled else _MISSING
             value, include_value = _prompt_field_value(
@@ -580,17 +737,14 @@ def _prompt_from_json_schema(
             )
             if include_value:
                 data[field_name] = value
-            if field_name in required_fields and field_name not in data:
-                raise CLIError(f"Field '{field_name}' is required")
 
         additional_properties = field_schema.get("additionalProperties")
         if isinstance(additional_properties, dict) and prompt_optional:
-            additional_properties_schema = _resolve_ref_schema(schema, additional_properties)
+            additional_properties_schema = _resolve_effective_schema(schema, additional_properties)
 
             def _assign_typed_value(key: str, next_indent: str) -> None:
-                value, include_value = _prompt_field_value(key, additional_properties_schema, is_required=True, field_indent=next_indent)
-                if include_value:
-                    data[key] = value
+                value, _ = _prompt_field_value(key, additional_properties_schema, is_required=True, field_indent=next_indent)
+                data[key] = value
 
             _prompt_additional_properties(object_indent, _assign_typed_value)
         elif additional_properties is True and prompt_optional:
@@ -608,13 +762,28 @@ def _prompt_from_json_schema(
 
         return data
 
-    return _prompt_object(resolved_root_schema, prefilled=prefilled, object_indent=indent)
+    prompted_payload = _prompt_object(resolved_root_schema, prefilled=prefilled, object_indent=indent)
+    if validate_payload:
+        payload_validation_error = validate_instance(schema, prompted_payload)
+        if payload_validation_error is not None:
+            raise CLIError(f"Prompted payload is invalid: {payload_validation_error}")
+    return prompted_payload
 
 
 def prompt_for_schema(schema_class: type[BaseModel], prefilled: Optional[Dict[str, Any]] = None, indent: str = "") -> Dict[str, Any]:
     """Interactively prompt user for fields based on a Pydantic schema."""
     schema = _build_pydantic_prompt_schema(schema_class)
-    return _prompt_from_json_schema(schema, prefilled=prefilled, indent=indent, prompt_optional=True, default_display_name=schema_class.__name__)
+    # The prompt schema is intentionally lossy (e.g., datetime fields become strings),
+    # so validating the prompted payload against it can reject values that would be
+    # valid after normal Pydantic validation/coercion.
+    return _prompt_from_json_schema(
+        schema,
+        prefilled=prefilled,
+        indent=indent,
+        prompt_optional=True,
+        default_display_name=schema_class.__name__,
+        validate_payload=False,
+    )
 
 
 def prompt_for_json_schema(
