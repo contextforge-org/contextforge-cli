@@ -479,6 +479,7 @@ def _prompt_from_json_schema(
         )
 
         def _format_string_default(default_value: Any) -> Tuple[str, bool]:
+            """Return a default prompt value (as text) and whether to show it."""
             if default_value is None:
                 return "", False
             if isinstance(default_value, str):
@@ -486,6 +487,7 @@ def _prompt_from_json_schema(
             return json.dumps(default_value), True
 
         def _prompt_string_with_default() -> Tuple[Optional[str], bool]:
+            """Prompt for a string value while honoring schema defaults and required-ness."""
             default_text, show_default = _format_string_default(field_schema.get("default"))
             value = _prompt_string_value(
                 console=console,
@@ -743,6 +745,7 @@ def _prompt_from_json_schema(
             additional_properties_schema = _resolve_effective_schema(schema, additional_properties)
 
             def _assign_typed_value(key: str, next_indent: str) -> None:
+                """Prompt for and assign a typed additional property value."""
                 value, _ = _prompt_field_value(key, additional_properties_schema, is_required=True, field_indent=next_indent)
                 data[key] = value
 
@@ -750,6 +753,7 @@ def _prompt_from_json_schema(
         elif additional_properties is True and prompt_optional:
 
             def _assign_json_value(key: str, next_indent: str) -> None:
+                """Prompt for and assign a JSON additional property value."""
                 formatted_next_indent = _format_prompt_indent(next_indent)
                 console.print(f"{formatted_next_indent}Enter JSON value", end="")
                 raw_value = typer.prompt("", type=str)
