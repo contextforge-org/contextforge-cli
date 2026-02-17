@@ -2,11 +2,27 @@
 """Tests for cforge.common.schema_validation."""
 
 # First-Party
-from cforge.common.schema_validation import validate_instance, validate_instance_against_subschema
+from cforge.common.schema_validation import validate_instance, validate_instance_against_subschema, validate_schema
 
 
 class TestSchemaValidation:
     """Tests for JSON Schema validation helpers."""
+
+    def test_validate_schema_valid_returns_none(self) -> None:
+        """Valid schemas return no error message."""
+        schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+        assert validate_schema(schema) is None
+
+    def test_validate_schema_requires_object_schema(self) -> None:
+        """Non-object schemas are rejected by guard clause."""
+        assert validate_schema([]) == "Input schema must be a JSON object"  # type: ignore[arg-type]
+
+    def test_validate_schema_invalid_schema_returns_error(self) -> None:
+        """Invalid JSON Schemas return a schema-error message."""
+        schema = {"type": 1}
+        message = validate_schema(schema)
+        assert isinstance(message, str)
+        assert message.startswith("Invalid JSON Schema:")
 
     def test_validate_instance_valid_payload(self) -> None:
         """Valid payloads return no error message."""

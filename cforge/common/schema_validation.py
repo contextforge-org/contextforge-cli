@@ -59,6 +59,24 @@ def _build_root_validator(schema: Dict[str, Any]) -> Any:
     return validator_cls(schema)
 
 
+def validate_schema(schema: Dict[str, Any]) -> Optional[str]:
+    """Validate a JSON Schema without validating a specific instance.
+
+    Returns:
+        A user-facing error message when invalid, otherwise ``None``.
+    """
+    if not isinstance(schema, dict):
+        return "Input schema must be a JSON object"
+
+    try:
+        _build_root_validator(schema)
+        return None
+    except SchemaError as exc:
+        return f"Invalid JSON Schema: {exc}"
+    except Exception as exc:  # pragma: no cover - defensive fallback for validator internals
+        return f"Schema validation failed: {exc}"
+
+
 def validate_instance(schema: Dict[str, Any], instance: Any) -> Optional[str]:
     """Validate an instance against a full schema.
 

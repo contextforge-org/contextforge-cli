@@ -3,7 +3,7 @@
 
 # Standard
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Optional, Union
 from unittest.mock import patch
 
 # Third-Party
@@ -13,7 +13,7 @@ import pytest
 # First-Party
 from cforge.common.errors import CLIError
 from cforge.common.prompting import (
-    _build_pydantic_field_schema,
+    _build_prompt_text,
     _infer_schema_type,
     _INT_SENTINEL_DEFAULT,
     prompt_for_json_schema,
@@ -22,8 +22,30 @@ from cforge.common.prompting import (
     _resolve_ref_schema,
     _resolve_schema_type,
     _schema_contains_ref,
+    _strip_schema_internal_properties,
     _unwrap_optional_annotation,
 )
+
+
+class TestBuildPromptText:
+    """Tests for internal prompt text formatting helpers."""
+
+    def test_build_prompt_text_falls_back_for_unserializable_default(self) -> None:
+        """Unserializable defaults should still render via string conversion."""
+
+        class UnserializableDefault:
+            def __str__(self) -> str:  # noqa: D105 - local test helper
+                return "<unserializable>"
+
+        result = _build_prompt_text(
+            field_name="field",
+            description=None,
+            default=UnserializableDefault(),
+            default_is_set=True,
+            is_required=True,
+            include_falsy_default=True,
+        )
+        assert "<unserializable>" in result
 
 
 class TestPromptForSchema:
@@ -172,6 +194,34 @@ class TestPromptForSchema:
 
             # Empty input for list should not add the field
             assert "tags" not in result or result.get("tags") is None
+
+    def test_prompt_with_optional_nested_object_declined(self, mock_console) -> None:
+        """Optional nested objects should be omitted when declined."""
+
+        class SubSchema(BaseModel):
+            url: str
+
+        class TestSchema(BaseModel):
+            config: Optional[SubSchema] = None
+
+        with patch("typer.confirm", return_value=False):
+            result = prompt_for_schema(TestSchema)
+
+        assert "config" not in result
+
+    def test_prompt_with_optional_nested_object_accepted(self, mock_console) -> None:
+        """Optional nested objects should prompt when accepted."""
+
+        class SubSchema(BaseModel):
+            url: str
+
+        class TestSchema(BaseModel):
+            config: Optional[SubSchema] = None
+
+        with patch("typer.confirm", return_value=True), patch("typer.prompt", return_value="https://example.com"):
+            result = prompt_for_schema(TestSchema)
+
+        assert result == {"config": {"url": "https://example.com"}}
 
     def test_prompt_dict_str_str(self, mock_console) -> None:
         """Test prompting for a string to string dict"""
@@ -372,7 +422,7 @@ class TestPromptForJsonSchema:
             "required": ["tags"],
         }
 
-        with patch("typer.confirm", side_effect=[True, True, False]), patch("typer.prompt", side_effect=["one", "two"]):
+        with patch("typer.prompt", return_value="one, two"):
             result = prompt_for_json_schema(schema, prompt_optional=False)
 
         assert result == {"tags": ["one", "two"]}
@@ -458,11 +508,9 @@ class TestPromptForJsonSchema:
         """Test invalid array indexes in local $ref pointers are rejected."""
         schema = {
             "type": "object",
-            "$defs": {
-                "Variants": [{"type": "string"}],
-            },
+            "x-variants": [{"type": "string"}],
             "properties": {
-                "value": {"$ref": "#/$defs/Variants/not-an-index"},
+                "value": {"$ref": "#/x-variants/not-an-index"},
             },
             "required": ["value"],
         }
@@ -939,6 +987,19 @@ class TestPromptForJsonSchema:
         """Test direct required-key inference resolves to object."""
         assert _infer_schema_type({"required": ["id"]}) == "object"
 
+    def test_infer_schema_type_type_list_null_only_returns_null(self) -> None:
+        """Test nullable-only `type` lists resolve to the null type."""
+        assert _infer_schema_type({"type": ["null"]}) == "null"
+
+    def test_infer_schema_type_type_list_with_no_valid_entries_falls_back(self) -> None:
+        """Type lists without valid string entries should fall back to structural hints."""
+        assert _infer_schema_type({"type": [1], "items": {"type": "string"}}) == "array"
+
+    def test_strip_schema_internal_properties_without_properties_is_noop(self) -> None:
+        """Schema stripping should handle missing `properties`/`required` keys."""
+        schema = {"type": "object"}
+        assert _strip_schema_internal_properties(schema, {"auth_value"}) == schema
+
     def test_resolve_effective_schema_can_skip_nullable_collapse(self) -> None:
         """Test caller can preserve nullable combinator wrappers."""
         schema = {
@@ -973,11 +1034,9 @@ class TestPromptForJsonSchema:
         """Test out-of-bounds array indexes in local $ref pointers are rejected."""
         schema = {
             "type": "object",
-            "$defs": {
-                "Variants": [{"type": "string"}],
-            },
+            "x-variants": [{"type": "string"}],
             "properties": {
-                "value": {"$ref": "#/$defs/Variants/1"},
+                "value": {"$ref": "#/x-variants/1"},
             },
             "required": ["value"],
         }
@@ -1011,11 +1070,9 @@ class TestPromptForJsonSchema:
         """Test local $ref traversal fails on invalid scalar path traversal."""
         schema = {
             "type": "object",
-            "$defs": {
-                "Scalar": 1,
-            },
+            "x-scalar": 1,
             "properties": {
-                "value": {"$ref": "#/$defs/Scalar/child"},
+                "value": {"$ref": "#/x-scalar/child"},
             },
             "required": ["value"],
         }
@@ -1130,6 +1187,23 @@ class TestPromptForJsonSchema:
             },
         }
 
+        with patch("typer.prompt", return_value=""):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {}
+
+    def test_prompt_for_json_schema_optional_integer_array_declined_is_skipped(self, mock_console) -> None:
+        """Optional non-string arrays should be skipped when declined via include gate."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                }
+            },
+        }
+
         with patch("typer.confirm", return_value=False):
             result = prompt_for_json_schema(schema, prompt_optional=True)
 
@@ -1158,7 +1232,7 @@ class TestPromptForJsonSchema:
             "properties": {
                 "tags": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {"type": "integer"},
                 }
             },
         }
@@ -1558,6 +1632,42 @@ class TestPromptForJsonSchema:
 
         assert result == {}
 
+    def test_prompt_for_json_schema_optional_object_declined_is_omitted(self, mock_console) -> None:
+        """Test optional object fields can be omitted via the include gate."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "properties": {"url": {"type": "string"}},
+                    "required": ["url"],
+                }
+            },
+        }
+
+        with patch("typer.confirm", return_value=False):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {}
+
+    def test_prompt_for_json_schema_optional_object_accepted_prompts_nested(self, mock_console) -> None:
+        """Test optional object fields prompt nested values when accepted."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "properties": {"url": {"type": "string"}},
+                    "required": ["url"],
+                }
+            },
+        }
+
+        with patch("typer.confirm", return_value=True), patch("typer.prompt", return_value="https://example.com"):
+            result = prompt_for_json_schema(schema, prompt_optional=True)
+
+        assert result == {"config": {"url": "https://example.com"}}
+
     def test_prompt_for_json_schema_additional_properties_schema(self, mock_console) -> None:
         """Test `additionalProperties` schema prompts for typed extra fields."""
         schema = {
@@ -1590,7 +1700,6 @@ class TestPromptForJsonSchema:
                 "tags": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "x-array-input": "csv",
                 }
             },
             "required": ["tags"],
@@ -1601,28 +1710,56 @@ class TestPromptForJsonSchema:
 
         assert result == {"tags": []}
 
-    def test_prompt_for_json_schema_optional_array_skip_include_prompt_no_entries(self, mock_console) -> None:
-        """Test optional arrays can skip include prompt and return no value when no entries are added."""
+    def test_prompt_for_json_schema_optional_string_array_blank_is_skipped(self, mock_console) -> None:
+        """Test optional string arrays skip cleanly when blank."""
         schema = {
             "type": "object",
             "properties": {
                 "tags": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "x-array-skip-include-prompt": True,
                 }
             },
         }
 
-        with patch("typer.confirm", return_value=False):
+        with patch("typer.prompt", return_value=""):
             result = prompt_for_json_schema(schema, prompt_optional=True)
 
         assert result == {}
 
-    def test_build_pydantic_field_schema_rejects_non_string_dict_keys(self) -> None:
+    def test_prompt_for_schema_rejects_non_string_dict_keys(self, mock_console) -> None:
         """Test dict fields with non-string keys are rejected for prompting."""
+
+        class TestSchema(BaseModel):
+            values: dict[int, str]
+
         with pytest.raises(CLIError, match="Only string keys are supported"):
-            _build_pydantic_field_schema(dict[int, str])
+            prompt_for_schema(TestSchema)
+
+    def test_prompt_for_schema_rejects_nested_non_string_dict_keys(self, mock_console) -> None:
+        """Nested Pydantic models should reject dict fields with non-string keys."""
+
+        class SubSchema(BaseModel):
+            values: dict[int, str]
+
+        class OuterSchema(BaseModel):
+            sub: SubSchema
+
+        with pytest.raises(CLIError, match="Only string keys are supported"):
+            prompt_for_schema(OuterSchema)
+
+    def test_prompt_for_schema_traverses_annotated_optional_and_dict_values(self, mock_console) -> None:
+        """Validator should traverse Annotated, Optional[...], and dict value types."""
+
+        class TestSchema(BaseModel):
+            annotated_scalar: Annotated[int, "meta"]
+            optional_scalar: Optional[int]
+            mapping: Dict[str, str]
+            untyped_mapping: Dict
+            bad: dict[int, str]
+
+        with pytest.raises(CLIError, match="Only string keys are supported"):
+            prompt_for_schema(TestSchema)
 
     def test_resolve_ref_schema_non_dict_input_returns_empty_schema(self) -> None:
         """Test resolve helper defensively returns empty schema for non-dict input."""
@@ -1634,6 +1771,17 @@ class TestPromptForJsonSchema:
         marker: object = object()
         with patch("cforge.common.prompting.get_origin", return_value=Union), patch("cforge.common.prompting.get_args", return_value=(type(None),)):
             assert _unwrap_optional_annotation(marker) is marker
+
+    def test_unwrap_optional_annotation_annotated_without_args_returns_annotation(self) -> None:
+        """Annotated branches should handle empty arg tuples defensively."""
+        marker: object = object()
+        with patch("cforge.common.prompting.get_origin", return_value=Annotated), patch("cforge.common.prompting.get_args", return_value=()):
+            assert _unwrap_optional_annotation(marker) is marker
+
+    def test_unwrap_optional_annotation_annotated_optional_unwraps(self) -> None:
+        """Annotated optional annotations should unwrap to the inner type."""
+        annotation = Annotated[Optional[int], "meta"]
+        assert _unwrap_optional_annotation(annotation) is int
 
     def test_resolve_schema_type_any_of_all_null_returns_null(self) -> None:
         """Test schema type resolver returns null when all anyOf variants are null."""

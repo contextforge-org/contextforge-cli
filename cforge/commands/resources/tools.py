@@ -186,8 +186,10 @@ def tools_execute(
     console = get_console()
 
     try:
+        if not tool_id.strip():
+            raise CLIError("Tool ID must be a non-empty string")
+
         prefilled_data: Optional[Dict[str, Any]] = None
-        prompt_optional = True
         if data_file:
             if not data_file.exists():
                 console.print(f"[red]File not found: {data_file}[/red]")
@@ -196,7 +198,7 @@ def tools_execute(
             if not isinstance(file_data, dict):
                 raise CLIError("Data file must contain a JSON object")
             prefilled_data = file_data
-            prompt_optional = False
+        prompt_optional = prefilled_data is None
 
         tool_result = make_authenticated_request("GET", f"/tools/{tool_id}")
         assert isinstance(tool_result, dict)
@@ -212,6 +214,14 @@ def tools_execute(
             input_schema = {"type": "object", "properties": {}}
         elif isinstance(raw_schema, dict):
             input_schema = raw_schema
+        elif isinstance(raw_schema, str):
+            try:
+                parsed_schema = json.loads(raw_schema)
+            except json.JSONDecodeError as exc:
+                raise CLIError("Tool input schema must be a JSON object") from exc
+            if not isinstance(parsed_schema, dict):
+                raise CLIError("Tool input schema must be a JSON object")
+            input_schema = parsed_schema
         else:
             raise CLIError("Tool input schema must be a JSON object")
 

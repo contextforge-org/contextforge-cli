@@ -262,22 +262,25 @@ class TestToolsCommands:
         }
         rpc_response = {"jsonrpc": "2.0", "id": "1", "result": {"content": [{"type": "text", "text": "ok"}]}}
 
-        with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
-            with patch("cforge.commands.resources.tools.prompt_for_json_schema", return_value={"query": "hello"}) as mock_prompt:
-                with patch("cforge.commands.resources.tools.make_authenticated_request", side_effect=[tool_response, rpc_response]) as mock_req:
-                    with patch("cforge.commands.resources.tools.print_json") as mock_print:
-                        tools_execute(tool_id="tool-1", data_file=None)
+        with patch_functions(
+            "cforge.commands.resources.tools",
+            get_console=mock_console,
+            prompt_for_json_schema={"return_value": {"query": "hello"}},
+            make_authenticated_request={"side_effect": [tool_response, rpc_response]},
+            print_json={},
+        ) as mocks:
+            tools_execute(tool_id="tool-1", data_file=None)
 
-                        mock_prompt.assert_called_once_with(tool_response["input_schema"], prefilled=None, prompt_optional=True)
-                        mock_print.assert_called_once_with(rpc_response["result"], "Tool Result")
-                        assert mock_req.call_count == 2
-                        rpc_call = mock_req.call_args_list[1]
-                        assert rpc_call[0][0] == "POST"
-                        assert rpc_call[0][1] == "/rpc"
-                        payload = rpc_call[1]["json_data"]
-                        assert payload["method"] == "tools/call"
-                        assert payload["params"]["name"] == "search_tool"
-                        assert payload["params"]["arguments"] == {"query": "hello"}
+            mocks.prompt_for_json_schema.assert_called_once_with(tool_response["input_schema"], prefilled=None, prompt_optional=True)
+            mocks.print_json.assert_called_once_with(rpc_response["result"], "Tool Result")
+            assert mocks.make_authenticated_request.call_count == 2
+            rpc_call = mocks.make_authenticated_request.call_args_list[1]
+            assert rpc_call[0][0] == "POST"
+            assert rpc_call[0][1] == "/rpc"
+            payload = rpc_call[1]["json_data"]
+            assert payload["method"] == "tools/call"
+            assert payload["params"]["name"] == "search_tool"
+            assert payload["params"]["arguments"] == {"query": "hello"}
 
     def test_tools_execute_with_data_file_prompts_missing_required(self, mock_console) -> None:
         """Test tools execute merges data file values and prompts only required fields."""
@@ -299,16 +302,19 @@ class TestToolsCommands:
             data_file = Path(temp_dir) / "args.json"
             data_file.write_text(json.dumps({"limit": 5}))
 
-            with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
-                with patch("cforge.commands.resources.tools.prompt_for_json_schema", return_value={"query": "hello", "limit": 5}) as mock_prompt:
-                    with patch("cforge.commands.resources.tools.make_authenticated_request", side_effect=[tool_response, rpc_response]) as mock_req:
-                        with patch("cforge.commands.resources.tools.print_json"):
-                            tools_execute(tool_id="tool-1", data_file=data_file)
+            with patch_functions(
+                "cforge.commands.resources.tools",
+                get_console=mock_console,
+                prompt_for_json_schema={"return_value": {"query": "hello", "limit": 5}},
+                make_authenticated_request={"side_effect": [tool_response, rpc_response]},
+                print_json={},
+            ) as mocks:
+                tools_execute(tool_id="tool-1", data_file=data_file)
 
-                        mock_prompt.assert_called_once_with(tool_response["inputSchema"], prefilled={"limit": 5}, prompt_optional=False)
-                        rpc_call = mock_req.call_args_list[1]
-                        payload = rpc_call[1]["json_data"]
-                        assert payload["params"]["arguments"] == {"query": "hello", "limit": 5}
+                mocks.prompt_for_json_schema.assert_called_once_with(tool_response["inputSchema"], prefilled={"limit": 5}, prompt_optional=False)
+                rpc_call = mocks.make_authenticated_request.call_args_list[1]
+                payload = rpc_call[1]["json_data"]
+                assert payload["params"]["arguments"] == {"query": "hello", "limit": 5}
 
     def test_tools_execute_falls_back_to_input_schema_when_inputschema_null(self, mock_console) -> None:
         """Test tools execute uses input_schema when inputSchema exists but is null."""
@@ -353,6 +359,14 @@ class TestToolsCommands:
                     tools_execute(tool_id="tool-1", data_file=Path("/nonexistent.json"))
                 mock_req.assert_not_called()
 
+    def test_tools_execute_requires_non_empty_tool_id(self, mock_console) -> None:
+        """Test tools execute fails fast for empty tool IDs."""
+        with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
+            with patch("cforge.commands.resources.tools.make_authenticated_request") as mock_req:
+                with pytest.raises(typer.Exit):
+                    tools_execute(tool_id="  ", data_file=None)
+                mock_req.assert_not_called()
+
     def test_tools_execute_requires_valid_tool_name(self, mock_console) -> None:
         """Test tools execute validates the fetched tool has a usable name."""
         tool_response = {"id": "tool-1", "name": None, "input_schema": {"type": "object", "properties": {}}}
@@ -362,14 +376,31 @@ class TestToolsCommands:
                 with pytest.raises(typer.Exit):
                     tools_execute(tool_id="tool-1", data_file=None)
 
-    def test_tools_execute_rejects_string_schema(self, mock_console) -> None:
-        """Test tools execute rejects string-encoded schemas."""
-        tool_response = {"id": "tool-1", "name": "search_tool", "input_schema": json.dumps({"type": "object", "properties": {}})}
+    def test_tools_execute_parses_string_schema(self, mock_console) -> None:
+        """Test tools execute accepts string-encoded schemas when they parse to an object."""
+        schema_str = json.dumps({"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]})
+        tool_response = {"id": "tool-1", "name": "search_tool", "input_schema": schema_str}
+        rpc_response = {"jsonrpc": "2.0", "id": "1", "result": {"ok": True}}
+
+        with patch_functions(
+            "cforge.commands.resources.tools",
+            get_console=mock_console,
+            prompt_for_json_schema={"return_value": {"query": "hello"}},
+            make_authenticated_request={"side_effect": [tool_response, rpc_response]},
+            print_json={},
+        ) as mocks:
+            tools_execute(tool_id="tool-1", data_file=None)
+            mocks.prompt_for_json_schema.assert_called_once_with(json.loads(schema_str), prefilled=None, prompt_optional=True)
+
+    def test_tools_execute_rejects_string_schema_invalid_json(self, mock_console) -> None:
+        """Test tools execute rejects string-encoded schemas that are not valid JSON."""
+        tool_response = {"id": "tool-1", "name": "search_tool", "input_schema": "{invalid json"}
 
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
-            with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=tool_response):
+            with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=tool_response) as mock_req:
                 with pytest.raises(typer.Exit):
                     tools_execute(tool_id="tool-1", data_file=None)
+                mock_req.assert_called_once()
 
     def test_tools_execute_rejects_invalid_schema_type(self, mock_console) -> None:
         """Test tools execute rejects non-object schema containers."""
@@ -381,7 +412,7 @@ class TestToolsCommands:
                     tools_execute(tool_id="tool-1", data_file=None)
 
     def test_tools_execute_rejects_string_schema_not_object(self, mock_console) -> None:
-        """Test tools execute rejects schema strings regardless of JSON content."""
+        """Test tools execute rejects schema strings that decode to non-object JSON."""
         tool_response = {"id": "tool-1", "name": "search_tool", "input_schema": json.dumps(["bad"])}
 
         with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):

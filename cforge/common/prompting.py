@@ -11,16 +11,15 @@ commands that need structured request payloads.
 """
 
 import json
-from typing import Any, Callable, Dict, get_args, get_origin, List, Optional, Tuple, Union
+from typing import Annotated, Any, Callable, Dict, get_args, get_origin, get_type_hints, List, Optional, Tuple, Union
 
 from pydantic import BaseModel
-from pydantic_core import PydanticUndefined
 from rich.console import Console
 import typer
 
 from cforge.common.console import get_console
 from cforge.common.errors import CLIError
-from cforge.common.schema_validation import validate_instance, validate_instance_against_subschema
+from cforge.common.schema_validation import validate_instance, validate_instance_against_subschema, validate_schema
 
 _INT_SENTINEL_DEFAULT = -4231415
 
@@ -41,6 +40,7 @@ def _build_prompt_text(
     field_name: str,
     description: Optional[str],
     default: Any,
+    default_is_set: bool,
     is_required: bool,
     include_falsy_default: bool = True,
 ) -> str:
@@ -49,9 +49,13 @@ def _build_prompt_text(
     if description and description != field_name:
         prompt_text += f" ({description})"
 
-    has_default = default not in (None, "") if include_falsy_default else bool(default) and default != ""
+    has_default = default_is_set and default is not None and (include_falsy_default or bool(default))
     if has_default:
-        prompt_text += f" [default: {default}]"
+        try:
+            default_text = json.dumps(default)
+        except TypeError:
+            default_text = str(default)
+        prompt_text += f" [default: {default_text}]"
 
     if not is_required:
         prompt_text += " [optional]"
@@ -105,8 +109,13 @@ def _prompt_string_value(
 
 
 def _unwrap_optional_annotation(annotation: Any) -> Any:
-    """Unwrap Optional[T] annotations into T."""
+    """Unwrap Optional[T] and Annotated[Optional[T], ...] into T."""
     origin = get_origin(annotation)
+    if origin is Annotated:
+        args = get_args(annotation)
+        if args:
+            return _unwrap_optional_annotation(args[0])
+
     args = get_args(annotation)
     if origin is Union and type(None) in args:
         non_none_args = [arg for arg in args if arg is not type(None)]
@@ -115,92 +124,69 @@ def _unwrap_optional_annotation(annotation: Any) -> Any:
     return annotation
 
 
-def _build_pydantic_field_schema(annotation: Any) -> Dict[str, Any]:
-    """Build a promptable schema dictionary from a Pydantic field annotation."""
-    annotation = _unwrap_optional_annotation(annotation)
-    origin = get_origin(annotation)
-    args = get_args(annotation)
+def _validate_pydantic_schema_dict_key_types(schema_class: type[BaseModel]) -> None:
+    """Reject dict fields with non-string keys (JSON object keys are always strings)."""
+    visited_models: set[type[BaseModel]] = set()
 
-    if annotation is bool or str(annotation) == "bool":
-        return {
-            "type": "boolean",
-            "x-boolean-show-default-if-missing": True,
-        }
+    def _unwrap_annotated(annotation: Any) -> Any:
+        """Return the underlying type for Annotated[T, ...] annotations."""
+        origin = get_origin(annotation)
+        if origin is Annotated:
+            args = get_args(annotation)
+            if not args:  # pragma: no cover - defensive for patched typing helpers
+                return annotation
+            return args[0]
+        return annotation
 
-    if annotation is int or str(annotation) == "int":
-        return {"type": "integer"}
+    def _resolve_type_hints(model_class: type[BaseModel]) -> Dict[str, Any]:
+        """Resolve type hints for a Pydantic model, keeping Annotated extras."""
+        try:
+            return get_type_hints(model_class, include_extras=True)
+        except Exception:  # pragma: no cover - defensive fallback for complex forward refs
+            return {}
 
-    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
-        nested = _build_pydantic_prompt_schema(annotation)
-        nested["x-object-skip-include-prompt"] = True
-        return nested
+    def _visit_annotation(annotation: Any) -> None:
+        """Walk annotation trees to find dict key types and nested models."""
+        annotation = _unwrap_annotated(annotation)
+        origin = get_origin(annotation)
 
-    if origin is list or str(annotation).startswith("list"):
-        list_type = args[0] if args else str
-        list_type = _unwrap_optional_annotation(list_type)
-        if isinstance(list_type, type) and issubclass(list_type, BaseModel):
-            return {
-                "type": "array",
-                "items": _build_pydantic_prompt_schema(list_type),
-            }
-        return {
-            "type": "array",
-            "items": {"type": "string"},
-            "x-array-input": "csv",
-            "x-array-skip-include-prompt": True,
-        }
+        if origin is Union:
+            for arg in get_args(annotation):
+                if arg is type(None):
+                    continue
+                _visit_annotation(arg)
+            return
 
-    if origin is dict:
-        dict_key_type = args[0] if len(args) > 0 else str
-        dict_value_type = _unwrap_optional_annotation(args[1]) if len(args) > 1 else Any
-        if dict_key_type is not str:
-            raise CLIError("Only string keys are supported")
+        if origin in {list, set, frozenset, tuple}:
+            for arg in get_args(annotation):
+                _visit_annotation(arg)
+            return
 
-        additional_properties: Any
-        if dict_value_type is Any:
-            additional_properties = True
-        elif isinstance(dict_value_type, type) and issubclass(dict_value_type, BaseModel):
-            additional_properties = _build_pydantic_prompt_schema(dict_value_type)
-        else:
-            additional_properties = _build_pydantic_field_schema(dict_value_type)
+        if origin is dict:
+            args = get_args(annotation)
+            dict_key_type = _unwrap_annotated(args[0]) if len(args) > 0 else str
+            if dict_key_type is not str:
+                raise CLIError("Only string keys are supported")
+            if len(args) > 1:
+                _visit_annotation(args[1])
+            return
 
-        return {
-            "type": "object",
-            "additionalProperties": additional_properties,
-            "x-object-skip-include-prompt": True,
-        }
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            _visit_model(annotation)
+            return
 
-    return {"type": "string"}
+    def _visit_model(model_class: type[BaseModel]) -> None:
+        """Visit model field annotations recursively, avoiding cycles."""
+        if model_class in visited_models:
+            return
+        visited_models.add(model_class)
 
+        resolved_hints = _resolve_type_hints(model_class)
+        for field_name, field_info in model_class.model_fields.items():
+            annotation = resolved_hints.get(field_name, field_info.annotation)
+            _visit_annotation(annotation)
 
-def _build_pydantic_prompt_schema(schema_class: type[BaseModel]) -> Dict[str, Any]:
-    """Build an object schema from a Pydantic model for shared prompting."""
-    properties: Dict[str, Any] = {}
-    required: List[str] = []
-
-    for field_name, field_info in schema_class.model_fields.items():
-        if field_name in ["model_config", "auth_value"]:
-            continue
-
-        field_schema = _build_pydantic_field_schema(field_info.annotation)
-        field_schema["description"] = field_info.description or field_name
-        field_schema["x-include-falsy-default"] = False
-
-        if field_info.default is not PydanticUndefined:
-            field_schema["default"] = field_info.default
-
-        properties[field_name] = field_schema
-        if field_info.is_required():
-            required.append(field_name)
-
-    schema: Dict[str, Any] = {
-        "title": schema_class.__name__,
-        "type": "object",
-        "properties": properties,
-    }
-    if required:
-        schema["required"] = required
-    return schema
+    _visit_model(schema_class)
 
 
 def _as_schema_dict(value: Any) -> Dict[str, Any]:
@@ -434,6 +420,11 @@ def _prompt_from_json_schema(
     if prefilled is not None and not isinstance(prefilled, dict):
         raise CLIError("Prefilled input must be a JSON object")
 
+    if validate_payload:
+        schema_error = validate_schema(schema)
+        if schema_error is not None:
+            raise CLIError(schema_error)
+
     resolved_root_schema = _resolve_effective_schema(schema, schema)
     root_type = _resolve_schema_type(schema, resolved_root_schema)
     if root_type != "object":
@@ -467,13 +458,12 @@ def _prompt_from_json_schema(
         field_schema = _resolve_effective_schema(schema, field_schema)
         schema_type = _resolve_schema_type(schema, field_schema)
         formatted_field_indent = _format_prompt_indent(field_indent)
-        include_falsy_default = field_schema.get("x-include-falsy-default")
-        if not isinstance(include_falsy_default, bool):
-            include_falsy_default = True
+        include_falsy_default = True
         prompt_text = _build_prompt_text(
             field_name=field_name,
             description=field_schema.get("description") if isinstance(field_schema.get("description"), str) else None,
             default=field_schema.get("default"),
+            default_is_set="default" in field_schema,
             is_required=is_required,
             include_falsy_default=include_falsy_default,
         )
@@ -548,8 +538,7 @@ def _prompt_from_json_schema(
             raise CLIError(f"Field '{field_name}' must be one of: {enum_text}")
 
         if schema_type == "object":
-            skip_optional_prompt = bool(field_schema.get("x-object-skip-include-prompt", False))
-            if not is_required and prompt_optional and not skip_optional_prompt and not _prompt_include_field(console, field_name, field_indent):
+            if not is_required and prompt_optional and not _prompt_include_field(console, field_name, field_indent):
                 return None, False
             console.print(f"{formatted_field_indent}[yellow]{prompt_text}[/yellow]")
             return _prompt_object(field_schema, prefilled=None, object_indent=_next_prompt_indent(field_indent)), True
@@ -561,8 +550,6 @@ def _prompt_from_json_schema(
             if not is_required and prompt_optional and not _prompt_include_field(console, field_name, field_indent):
                 return None, False
             default_val = field_schema.get("default")
-            force_show_default = bool(field_schema.get("x-boolean-show-default-if-missing", False))
-            show_default = isinstance(default_val, bool) or (force_show_default and default_val is None)
             bool_default = default_val if isinstance(default_val, bool) else False
             return (
                 _prompt_boolean_value(
@@ -570,7 +557,7 @@ def _prompt_from_json_schema(
                     field_indent=field_indent,
                     prompt_text=prompt_text,
                     default=bool_default,
-                    show_default=show_default,
+                    show_default=True,
                 ),
                 True,
             )
@@ -654,19 +641,15 @@ def _prompt_from_json_schema(
         field_schema = _resolve_effective_schema(schema, field_schema)
         formatted_field_indent = _format_prompt_indent(field_indent)
         item_schema = _resolve_effective_schema(schema, _as_schema_dict(field_schema.get("items")))
-        include_field = is_required
-        array_input_style = field_schema.get("x-array-input")
-        skip_optional_prompt = bool(field_schema.get("x-array-skip-include-prompt", False))
+        item_type = _resolve_schema_type(schema, item_schema)
 
-        if prefilled is None and not is_required and prompt_optional and not skip_optional_prompt:
+        if prefilled is None and item_type != "string" and not is_required and prompt_optional:
             if not _prompt_include_field(console, field_name, field_indent):
                 return [], False
-            include_field = True
 
         values: List[Any] = []
 
         if prefilled is not None:
-            item_type = _resolve_schema_type(schema, item_schema)
             nested_indent = _next_prompt_indent(field_indent)
             for idx, entry in enumerate(prefilled):
                 if item_type == "object" and isinstance(entry, dict):
@@ -678,7 +661,7 @@ def _prompt_from_json_schema(
                     values.append(entry)
             return values, True
 
-        if array_input_style == "csv":
+        if item_type == "string":
             console.print(f"{formatted_field_indent}[dim]Enter comma-separated values, or press Enter to skip[/dim] ", end="")
             csv_value = typer.prompt("", default="", show_default=False)
             if csv_value:
@@ -697,9 +680,7 @@ def _prompt_from_json_schema(
 
         if values:
             return values, True
-        if include_field or is_required:
-            return [], True
-        return [], False
+        return [], True
 
     def _prompt_additional_properties(
         object_indent: str,
@@ -774,9 +755,27 @@ def _prompt_from_json_schema(
     return prompted_payload
 
 
+def _strip_schema_internal_properties(schema: Dict[str, Any], skip_fields: set[str]) -> Dict[str, Any]:
+    """Return a shallow copy of a root object schema without internal prompt-only fields."""
+    schema_copy = schema.copy()
+    properties = schema_copy.get("properties")
+    if isinstance(properties, dict):
+        properties_copy = properties.copy()
+        for field in skip_fields:
+            properties_copy.pop(field, None)
+        schema_copy["properties"] = properties_copy
+
+    required = schema_copy.get("required")
+    if isinstance(required, list):
+        schema_copy["required"] = [field for field in required if isinstance(field, str) and field not in skip_fields]
+
+    return schema_copy
+
+
 def prompt_for_schema(schema_class: type[BaseModel], prefilled: Optional[Dict[str, Any]] = None, indent: str = "") -> Dict[str, Any]:
     """Interactively prompt user for fields based on a Pydantic schema."""
-    schema = _build_pydantic_prompt_schema(schema_class)
+    _validate_pydantic_schema_dict_key_types(schema_class)
+    schema = _strip_schema_internal_properties(schema_class.model_json_schema(), {"auth_value", "model_config"})
     # The prompt schema is intentionally lossy (e.g., datetime fields become strings),
     # so validating the prompted payload against it can reject values that would be
     # valid after normal Pydantic validation/coercion.
