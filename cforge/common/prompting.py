@@ -108,22 +108,6 @@ def _prompt_string_value(
     return typer.prompt("", type=str, default=default, show_default=show_default)
 
 
-def _unwrap_optional_annotation(annotation: Any) -> Any:
-    """Unwrap Optional[T] and Annotated[Optional[T], ...] into T."""
-    origin = get_origin(annotation)
-    if origin is Annotated:
-        args = get_args(annotation)
-        if args:
-            return _unwrap_optional_annotation(args[0])
-
-    args = get_args(annotation)
-    if origin is Union and type(None) in args:
-        non_none_args = [arg for arg in args if arg is not type(None)]
-        if non_none_args:
-            return non_none_args[0]
-    return annotation
-
-
 def _validate_pydantic_schema_dict_key_types(schema_class: type[BaseModel]) -> None:
     """Reject dict fields with non-string keys (JSON object keys are always strings)."""
     visited_models: set[type[BaseModel]] = set()

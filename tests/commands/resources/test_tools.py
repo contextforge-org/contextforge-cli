@@ -156,11 +156,16 @@ class TestToolsCommands:
         """Test tools update interactive mode."""
         mock_result = {"id": "tool-1", "name": "updated"}
 
-        with patch("cforge.commands.resources.tools.get_console", return_value=mock_console):
-            with patch("cforge.commands.resources.tools.prompt_for_schema", return_value={"description": "updated"}):
-                with patch("cforge.commands.resources.tools.make_authenticated_request", return_value=mock_result):
-                    with patch("cforge.commands.resources.tools.print_json"):
-                        tools_update(tool_id="tool-1", data_file=None)
+        with patch_functions(
+            "cforge.commands.resources.tools",
+            get_console=mock_console,
+            prompt_for_schema={"return_value": {"description": "updated"}},
+            make_authenticated_request={"return_value": mock_result},
+            print_json=None,
+        ) as mocks:
+            tools_update(tool_id="tool-1", data_file=None)
+            mocks.make_authenticated_request.assert_called_once_with("PUT", "/tools/tool-1", json_data={"description": "updated"})
+            mocks.print_json.assert_called_once()
 
     def test_tools_delete_with_confirmation(self, mock_console) -> None:
         """Test tools delete with confirmation."""

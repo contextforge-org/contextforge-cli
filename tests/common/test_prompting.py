@@ -3,7 +3,7 @@
 
 # Standard
 from datetime import datetime
-from typing import Annotated, Any, Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Optional
 from unittest.mock import patch
 
 # Third-Party
@@ -23,7 +23,6 @@ from cforge.common.prompting import (
     _resolve_schema_type,
     _schema_contains_ref,
     _strip_schema_internal_properties,
-    _unwrap_optional_annotation,
 )
 
 
@@ -1765,23 +1764,6 @@ class TestPromptForJsonSchema:
         """Test resolve helper defensively returns empty schema for non-dict input."""
         result = _resolve_ref_schema({}, "not-a-dict")  # type: ignore[arg-type]
         assert result == {}
-
-    def test_unwrap_optional_annotation_union_only_none_returns_annotation(self) -> None:
-        """Test Optional unwrapping keeps annotation when union has no non-None members."""
-        marker: object = object()
-        with patch("cforge.common.prompting.get_origin", return_value=Union), patch("cforge.common.prompting.get_args", return_value=(type(None),)):
-            assert _unwrap_optional_annotation(marker) is marker
-
-    def test_unwrap_optional_annotation_annotated_without_args_returns_annotation(self) -> None:
-        """Annotated branches should handle empty arg tuples defensively."""
-        marker: object = object()
-        with patch("cforge.common.prompting.get_origin", return_value=Annotated), patch("cforge.common.prompting.get_args", return_value=()):
-            assert _unwrap_optional_annotation(marker) is marker
-
-    def test_unwrap_optional_annotation_annotated_optional_unwraps(self) -> None:
-        """Annotated optional annotations should unwrap to the inner type."""
-        annotation = Annotated[Optional[int], "meta"]
-        assert _unwrap_optional_annotation(annotation) is int
 
     def test_resolve_schema_type_any_of_all_null_returns_null(self) -> None:
         """Test schema type resolver returns null when all anyOf variants are null."""
