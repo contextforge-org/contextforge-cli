@@ -16,14 +16,11 @@ from typing import Any, Dict, Optional
 import typer
 
 # First-Party
-from cforge.common import (
-    get_console,
-    handle_exception,
-    make_authenticated_request,
-    print_json,
-    print_table,
-    prompt_for_schema,
-)
+from cforge.common.console import get_console
+from cforge.common.errors import handle_exception
+from cforge.common.http import make_authenticated_request
+from cforge.common.prompting import prompt_for_schema
+from cforge.common.render import print_json, print_table
 from mcpgateway.schemas import ResourceCreate, ResourceUpdate
 
 

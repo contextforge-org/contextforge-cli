@@ -12,8 +12,9 @@ import pytest
 import typer
 
 # First-Party
-from cforge.commands.resources.plugins import PluginMode, plugins_get, plugins_list, plugins_stats
-from cforge.common import AuthenticationError, CLIError
+from cforge.commands.resources.plugins import _parse_plugin_mode, PluginMode, plugins_get, plugins_list, plugins_stats
+from cforge.common.errors import AuthenticationError, CLIError
+from cforge.main import app
 from tests.conftest import invoke_typer_command, patch_functions
 
 
@@ -31,6 +32,11 @@ class TestPluginCommands:
     def test_plugin_mode_enum_missing_unknown_value(self) -> None:
         """Unknown strings should not be coerced into Enum members."""
         assert PluginMode._missing_("nope") is None
+
+    def test_parse_plugin_mode_invalid_value_raises(self) -> None:
+        """Invalid mode values should raise a clear CLIError."""
+        with pytest.raises(CLIError, match="Invalid value for '--mode'"):
+            _parse_plugin_mode("invalid")
 
     def test_plugins_list_success(self, mock_console) -> None:
         """Test plugins list command with table output."""
@@ -87,6 +93,19 @@ class TestPluginCommands:
             assert call_args[0][1] == "/admin/plugins"
             assert call_args[1]["params"] == {"search": "pii", "mode": "enforce", "hook": "tool_pre_invoke", "tag": "security"}
 
+    def test_plugins_list_mode_case_insensitive_via_cli(self, cli_runner, mock_console) -> None:
+        """Test mixed-case --mode values work through actual CLI parsing."""
+        with patch_functions(
+            "cforge.commands.resources.plugins",
+            get_console=mock_console,
+            make_authenticated_request={"return_value": {"plugins": [], "total": 0, "enabled_count": 0, "disabled_count": 0}},
+            print_table=None,
+        ) as mocks:
+            result = cli_runner.invoke(app, ["plugins", "list", "--mode", "EnFoRcE"])
+            assert result.exit_code == 0
+            call_args = mocks.make_authenticated_request.call_args
+            assert call_args[1]["params"]["mode"] == "enforce"
+
     def test_plugins_list_error(self, mock_console) -> None:
         """Test plugins list error handling."""
         with patch_functions("cforge.commands.resources.plugins", get_console=mock_console, make_authenticated_request={"side_effect": Exception("API error")}):
@@ -110,6 +129,32 @@ class TestPluginCommands:
         with patch_functions("cforge.commands.resources.plugins", get_console=mock_console, make_authenticated_request={"side_effect": Exception("API error")}):
             with pytest.raises(typer.Exit):
                 invoke_typer_command(plugins_get, name="pii_filter")
+
+    def test_plugins_get_not_found_shows_plugin_hint(self, mock_console) -> None:
+        """Test plugins get shows a plugin-not-found hint on plugin-specific 404s."""
+        with patch_functions(
+            "cforge.commands.resources.plugins",
+            get_console=mock_console,
+            make_authenticated_request={"side_effect": CLIError("API request failed (404): Plugin 'missing_plugin' not found")},
+        ):
+            with pytest.raises(typer.Exit):
+                invoke_typer_command(plugins_get, name="missing_plugin")
+
+        assert any("Plugin not found: missing_plugin" in str(call) for call in mock_console.print.call_args_list)
+        assert not any("Admin plugin API unavailable" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_plugins_get_generic_not_found_shows_admin_api_hint(self, mock_console) -> None:
+        """Test plugins get shows admin-api hint for generic 404 errors."""
+        with patch_functions(
+            "cforge.commands.resources.plugins",
+            get_console=mock_console,
+            make_authenticated_request={"side_effect": CLIError("API request failed (404): Not Found")},
+        ):
+            with pytest.raises(typer.Exit):
+                invoke_typer_command(plugins_get, name="missing_plugin")
+
+        assert any("Admin plugin API unavailable" in str(call) for call in mock_console.print.call_args_list)
+        assert not any("Plugin not found: missing_plugin" in str(call) for call in mock_console.print.call_args_list)
 
     def test_plugins_stats_success(self, mock_console) -> None:
         """Test plugins stats command."""
@@ -152,3 +197,15 @@ class TestPluginCommands:
                 invoke_typer_command(plugins_list)
 
         assert any("Admin plugin API unavailable" in str(call) for call in mock_console.print.call_args_list)
+
+    def test_plugins_list_clierror_without_404_does_not_show_admin_api_hint(self, mock_console) -> None:
+        """Test non-404 CLI errors do not show an admin-api availability hint."""
+        with patch_functions(
+            "cforge.commands.resources.plugins",
+            get_console=mock_console,
+            make_authenticated_request={"side_effect": CLIError("API request failed (500): Internal Server Error")},
+        ):
+            with pytest.raises(typer.Exit):
+                invoke_typer_command(plugins_list)
+
+        assert not any("Admin plugin API unavailable" in str(call) for call in mock_console.print.call_args_list)

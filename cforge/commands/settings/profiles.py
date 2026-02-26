@@ -9,27 +9,29 @@ CLI commands for profile management
 
 # Standard
 from datetime import datetime
-from pathlib import Path
-from typing import Optional
 import json
+from pathlib import Path
 import secrets
 import string
+from typing import Optional
 
 # Third-Party
 import typer
 
 # First-Party
-from cforge.common import get_console, print_table, print_json, prompt_for_schema
+from cforge.common.console import get_console
+from cforge.common.prompting import prompt_for_schema
+from cforge.common.render import print_json, print_table
 from cforge.config import get_settings
 from cforge.profile_utils import (
     AuthProfile,
-    ProfileStore,
+    get_active_profile,
     get_all_profiles,
     get_profile,
-    get_active_profile,
-    set_active_profile,
     load_profile_store,
+    ProfileStore,
     save_profile_store,
+    set_active_profile,
 )
 
 

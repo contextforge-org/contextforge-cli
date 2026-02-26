@@ -16,14 +16,11 @@ from typing import Any, Dict, Optional
 import typer
 
 # First-Party
-from cforge.common import (
-    get_console,
-    handle_exception,
-    make_authenticated_request,
-    print_json,
-    print_table,
-    prompt_for_schema,
-)
+from cforge.common.console import get_console
+from cforge.common.errors import CLIError, handle_exception
+from cforge.common.http import make_authenticated_request
+from cforge.common.prompting import prompt_for_json_schema, prompt_for_schema
+from cforge.common.render import print_json, print_table
 from mcpgateway.schemas import ToolCreate, ToolUpdate
 
 
@@ -176,6 +173,81 @@ def tools_toggle(
         result = make_authenticated_request("POST", f"/tools/{tool_id}/state", params={"activate": activate})
         console.print("[green]✓ Tool toggled successfully![/green]")
         print_json(result, "Tool Status")
+
+    except Exception as e:
+        handle_exception(e)
+
+
+def tools_execute(
+    tool_id: str = typer.Argument(..., help="Tool ID"),
+    data_file: Optional[Path] = typer.Option(None, "--data", help="JSON file containing tool arguments"),
+) -> None:
+    """Execute a tool by ID using optional dynamic schema prompting."""
+    console = get_console()
+
+    try:
+        if not tool_id.strip():
+            raise CLIError("Tool ID must be a non-empty string")
+
+        prefilled_data: Optional[Dict[str, Any]] = None
+        if data_file:
+            if not data_file.exists():
+                console.print(f"[red]File not found: {data_file}[/red]")
+                raise typer.Exit(1)
+            file_data = json.loads(data_file.read_text())
+            if not isinstance(file_data, dict):
+                raise CLIError("Data file must contain a JSON object")
+            prefilled_data = file_data
+        prompt_optional = prefilled_data is None
+
+        tool_result = make_authenticated_request("GET", f"/tools/{tool_id}")
+        assert isinstance(tool_result, dict)
+
+        tool_name = tool_result.get("name")
+        if not isinstance(tool_name, str) or not tool_name:
+            raise CLIError(f"Tool '{tool_id}' does not have a valid name")
+
+        raw_schema = tool_result.get("inputSchema")
+        if raw_schema is None:
+            raw_schema = tool_result.get("input_schema")
+        if raw_schema is None:
+            input_schema = {"type": "object", "properties": {}}
+        elif isinstance(raw_schema, dict):
+            input_schema = raw_schema
+        elif isinstance(raw_schema, str):
+            try:
+                parsed_schema = json.loads(raw_schema)
+            except json.JSONDecodeError as exc:
+                raise CLIError("Tool input schema must be a JSON object") from exc
+            if not isinstance(parsed_schema, dict):
+                raise CLIError("Tool input schema must be a JSON object")
+            input_schema = parsed_schema
+        else:
+            raise CLIError("Tool input schema must be a JSON object")
+
+        if not input_schema:
+            input_schema = {"type": "object", "properties": {}}
+
+        data = prompt_for_json_schema(input_schema, prefilled=prefilled_data, prompt_optional=prompt_optional)
+
+        rpc_payload: Dict[str, Any] = {"jsonrpc": "2.0", "id": f"cforge-tools-{tool_id}", "method": "tools/call", "params": {"name": tool_name, "arguments": data}}
+        rpc_result = make_authenticated_request("POST", "/rpc", json_data=rpc_payload)
+
+        if isinstance(rpc_result, dict) and "error" in rpc_result:
+            error = rpc_result["error"]
+            if isinstance(error, dict):
+                err_message = error.get("message", "Unknown error")
+                err_code = error.get("code")
+                if err_code is not None:
+                    raise CLIError(f"Tool execution failed ({err_code}): {err_message}")
+                raise CLIError(f"Tool execution failed: {err_message}")
+            raise CLIError(f"Tool execution failed: {error}")
+
+        console.print("[green]✓ Tool executed successfully![/green]")
+        if isinstance(rpc_result, dict) and "result" in rpc_result:
+            print_json(rpc_result["result"], "Tool Result")
+        else:
+            print_json(rpc_result, "Tool Result")
 
     except Exception as e:
         handle_exception(e)

@@ -17,7 +17,8 @@ from typing import Any, Dict, Optional
 import typer
 
 # First-Party
-from cforge.common import get_base_url, get_console, make_authenticated_request
+from cforge.common.console import get_console
+from cforge.common.http import get_base_url, make_authenticated_request
 
 
 def export(

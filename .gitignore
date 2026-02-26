@@ -18,7 +18,6 @@ CLAUDE.local.md
 .scannerwork
 llms-full.txt
 aider*
-.aider*
 todo/
 *.sarif
 devskim-results.sarif
@@ -35,7 +34,6 @@ token.txt
 mcpgateway.sbom.xml
 gateway_service_leader.lock
 docs/docs/test/
-tmp
 *.tgz
 *.gz
 *.bz
@@ -74,9 +72,7 @@ dictionary.dic
 pdm.lock
 .pdm-python
 temp/
-public/
 *history.md
-htmlcov
 test_commands.md
 cover.md
 build/
@@ -99,20 +95,15 @@ scribeflow.log
 coverage_re
 bin/flagged
 flagged/
-certs/
 # VENV
 .python37/
 .python39/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
-**/__pycache__/
 *.py[cod]
 *$py.class
 mcpgateway-wrapper/src/mcp_gateway_wrapper/__pycache__/
-
-# Bak
-*.bak
 
 # C extensions
 *.so
@@ -120,7 +111,6 @@ mcpgateway-wrapper/src/mcp_gateway_wrapper/__pycache__/
 # Distribution / packaging
 .wily/
 .Python
-build/
 develop-eggs/
 dist/
 downloads/
@@ -165,7 +155,6 @@ coverage.xml
 *.pot
 
 # Django stuff:
-*.log
 local_settings.py
 db.sqlite3
 
@@ -199,8 +188,6 @@ celerybeat-schedule
 *.sage.py
 
 # Environments
-.env
-.venv
 env/
 venv/
 ENV/
@@ -231,9 +218,6 @@ dmypy.json
 
 .idea/
 
-# Sonar
-.scannerwork
-
 # vim
 *.swp
 *,cover
@@ -243,9 +227,6 @@ dmypy.json
 logging/
 
 .ai*
-
-# downloads
-downloads/
 
 # db_path
 db_path/

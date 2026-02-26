@@ -11,7 +11,7 @@ CLI command: whoami
 import typer
 
 # First-Party
-from cforge.common import get_console
+from cforge.common.console import get_console
 
 
 def deploy() -> None:

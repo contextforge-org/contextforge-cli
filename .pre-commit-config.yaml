@@ -530,5 +530,5 @@ repos:
     rev: 1.7.0  # or master if you're bold
     hooks:
       - id: interrogate
-        args: [--quiet, --fail-under=100]
+        args: [--quiet, --fail-under=100, --exclude, cforge/_version.py]
         files: ^cforge/

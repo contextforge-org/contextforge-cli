@@ -11,11 +11,9 @@ CLI command group: metrics
 import typer
 
 # First-Party
-from cforge.common import (
-    get_console,
-    make_authenticated_request,
-    print_json,
-)
+from cforge.common.console import get_console
+from cforge.common.http import make_authenticated_request
+from cforge.common.render import print_json
 
 
 def metrics_get(

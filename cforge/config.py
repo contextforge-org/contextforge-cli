@@ -21,7 +21,6 @@ from pydantic import model_validator
 from mcpgateway.config import Settings
 from mcpgateway.config import get_settings as cf_get_settings
 
-
 HOME_DIR_NAME = ".contextforge"
 DEFAULT_HOME = Path.home() / HOME_DIR_NAME
 

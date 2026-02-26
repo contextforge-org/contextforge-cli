@@ -16,7 +16,8 @@ from typing import Optional
 import typer
 
 # First-Party
-from cforge.common import get_console, make_authenticated_request
+from cforge.common.console import get_console
+from cforge.common.http import make_authenticated_request
 
 
 def import_cmd(

@@ -16,7 +16,9 @@ from typing import Optional
 import typer
 
 # First-Party
-from cforge.common import get_console, get_settings, print_json
+from cforge.common.console import get_console
+from cforge.common.render import print_json
+from cforge.config import get_settings
 
 
 def config_schema(
