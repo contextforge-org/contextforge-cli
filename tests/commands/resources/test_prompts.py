@@ -9,8 +9,8 @@ Tests for the prompts commands.
 
 # Standard
 import json
-import tempfile
 from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
 # Third-Party
@@ -28,6 +28,8 @@ from cforge.commands.resources.prompts import (
     prompts_toggle,
     prompts_update,
 )
+
+# Local
 from tests.conftest import patch_functions
 
 

@@ -9,8 +9,8 @@ Tests for the virtual-servers commands.
 
 # Standard
 import json
-import tempfile
 from pathlib import Path
+import tempfile
 from unittest.mock import MagicMock, patch
 
 # Third-Party
@@ -33,6 +33,8 @@ from cforge.commands.resources.virtual_servers import (
     virtual_servers_tools,
     virtual_servers_update,
 )
+
+# Local
 from tests.conftest import mock_mcp_server_sse, patch_functions, register_mcp_server
 
 

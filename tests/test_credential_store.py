@@ -13,7 +13,7 @@ import json
 # Third-Party
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers import algorithms, Cipher, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 # First-Party
@@ -73,6 +73,7 @@ class TestCredentialDecryption:
 
     def _encrypt_data(self, data: str, encryption_key: str) -> bytes:
         """Helper to encrypt data using the same format as electron-store/conf."""
+        # Standard
         import os
 
         # Generate random IV
@@ -226,6 +227,7 @@ class TestLoadProfileCredentials:
 
     def _encrypt_data(self, data: str, encryption_key: str) -> bytes:
         """Helper to encrypt data using the same format as electron-store/conf."""
+        # Standard
         import os
 
         # Generate random IV

@@ -9,8 +9,8 @@ Tests for the config-schema command.
 
 # Standard
 import json
-import tempfile
 from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
 # First-Party

@@ -10,13 +10,16 @@ fields, and local `$ref` resolution. It is the shared input pipeline used by
 commands that need structured request payloads.
 """
 
+# Standard
 import json
 from typing import Annotated, Any, Callable, Dict, get_args, get_origin, get_type_hints, List, Optional, Tuple, Union
 
+# Third-Party
 from pydantic import BaseModel
 from rich.console import Console
 import typer
 
+# First-Party
 from cforge.common.console import get_console
 from cforge.common.errors import CLIError
 from cforge.common.schema_validation import validate_instance, validate_instance_against_subschema, validate_schema

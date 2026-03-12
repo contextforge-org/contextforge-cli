@@ -9,8 +9,8 @@ Tests for the export command.
 
 # Standard
 import json
-import tempfile
 from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
 # Third-Party
@@ -49,6 +49,7 @@ class TestExportCommand:
     def test_export_with_default_filename(self, mock_base_url, mock_console) -> None:
         """Test export with auto-generated filename."""
         mock_export_data = {"metadata": {"entity_counts": {}}}
+        # Standard
         import os
 
         with tempfile.TemporaryDirectory() as temp_dir:

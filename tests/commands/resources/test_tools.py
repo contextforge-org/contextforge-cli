@@ -9,8 +9,8 @@ Tests for the tools commands.
 
 # Standard
 import json
-import tempfile
 from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
 # Third-Party
@@ -28,6 +28,8 @@ from cforge.commands.resources.tools import (
     tools_toggle,
     tools_update,
 )
+
+# Local
 from tests.conftest import patch_functions
 
 

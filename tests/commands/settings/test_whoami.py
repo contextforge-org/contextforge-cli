@@ -80,8 +80,11 @@ class TestWhoamiWithProfiles:
 
     def test_whoami_with_active_profile_and_token(self, mock_settings, mock_console) -> None:
         """Test whoami displays active profile information along with auth status."""
-        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
+        # Standard
         from datetime import datetime
+
+        # First-Party
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         # Create and save an active profile
         profile_id = "test-profile-whoami"
@@ -125,8 +128,11 @@ class TestWhoamiWithProfiles:
 
     def test_whoami_with_active_profile_with_metadata(self, mock_settings, mock_console) -> None:
         """Test whoami displays profile metadata when available."""
-        from cforge.profile_utils import AuthProfile, ProfileMetadata, ProfileStore, save_profile_store
+        # Standard
         from datetime import datetime
+
+        # First-Party
+        from cforge.profile_utils import AuthProfile, ProfileMetadata, ProfileStore, save_profile_store
 
         # Create profile with metadata
         profile_id = "test-profile-metadata"
@@ -165,8 +171,11 @@ class TestWhoamiWithProfiles:
 
     def test_whoami_with_active_profile_no_auth(self, mock_settings, mock_console) -> None:
         """Test whoami with active profile but no authentication."""
-        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
+        # Standard
         from datetime import datetime
+
+        # First-Party
+        from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         # Create and save an active profile
         profile_id = "test-profile-noauth"

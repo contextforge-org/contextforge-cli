@@ -164,6 +164,7 @@ def run(
 
     # Import top-level translate here to avoid undesirable initialization
     # Third Party
+    # First-Party
     from mcpgateway.translate import main as translate_main
 
     # Launch the translation wrapper in a subprocess

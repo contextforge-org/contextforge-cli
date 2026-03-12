@@ -9,8 +9,8 @@ Tests for the mcp-servers commands.
 
 # Standard
 import json
-import tempfile
 from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
 # Third-Party
@@ -27,6 +27,8 @@ from cforge.commands.resources.mcp_servers import (
     mcp_servers_toggle,
     mcp_servers_update,
 )
+
+# Local
 from tests.conftest import patch_functions
 
 

@@ -144,8 +144,10 @@ class TestLoginWithProfiles:
 
     def test_login_saves_to_profile_specific_token_file(self, mock_base_url, mock_console, mock_settings) -> None:
         """Test that login saves token to profile-specific file when profile is active."""
+        # Standard
         from datetime import datetime
 
+        # First-Party
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         mock_response = Mock()
@@ -181,8 +183,10 @@ class TestLoginWithProfiles:
 
     def test_login_with_multiple_profiles(self, mock_base_url, mock_console, mock_settings) -> None:
         """Test that different profiles can have different tokens."""
+        # Standard
         from datetime import datetime
 
+        # First-Party
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         profile_id1 = "profile-1"

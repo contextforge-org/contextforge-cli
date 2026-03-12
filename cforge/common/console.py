@@ -9,8 +9,10 @@ Both are cached so commands across the process use consistent output and app
 configuration without repeated construction.
 """
 
+# Standard
 from functools import lru_cache
 
+# Third-Party
 from rich.console import Console
 import typer
 

@@ -8,15 +8,17 @@ Tests for the serve command.
 """
 
 # Standard
-from unittest.mock import patch
 import threading
 import time
+from unittest.mock import patch
 
 # Third-Party
 import requests
 
 # First-Party
 from cforge.commands.server.serve import serve
+
+# Local
 from tests.conftest import get_open_port, invoke_typer_command
 
 

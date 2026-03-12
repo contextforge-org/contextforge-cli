@@ -8,8 +8,8 @@ Tests for the support-bundle command.
 """
 
 # Standard
-import tempfile
 from pathlib import Path
+import tempfile
 from unittest.mock import Mock, patch
 
 # Third-Party

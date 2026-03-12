@@ -9,9 +9,11 @@ It keeps formatting decisions in one place so resource commands can focus on
 data retrieval while sharing a consistent terminal presentation.
 """
 
+# Standard
 import json
 from typing import Any, Dict, List, Optional
 
+# Third-Party
 from rich.console import Console, ConsoleOptions, RenderableType, RenderResult
 from rich.measure import Measurement
 from rich.panel import Panel
@@ -19,6 +21,7 @@ from rich.segment import Segment
 from rich.syntax import Syntax
 from rich.table import Table
 
+# First-Party
 from cforge.common.console import get_console
 from cforge.config import get_settings
 

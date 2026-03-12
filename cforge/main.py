@@ -28,6 +28,7 @@ from __future__ import annotations
 # Third-Party
 import typer
 
+# First-Party
 from cforge.commands.deploy.deploy import deploy
 from cforge.commands.metrics.metrics import metrics_get, metrics_reset
 from cforge.commands.resources.a2a import (
@@ -47,11 +48,7 @@ from cforge.commands.resources.mcp_servers import (
     mcp_servers_toggle,
     mcp_servers_update,
 )
-from cforge.commands.resources.plugins import (
-    plugins_get,
-    plugins_list,
-    plugins_stats,
-)
+from cforge.commands.resources.plugins import plugins_get, plugins_list, plugins_stats
 from cforge.commands.resources.prompts import (
     prompts_create,
     prompts_delete,
@@ -101,8 +98,6 @@ from cforge.commands.settings.logout import logout
 from cforge.commands.settings.support_bundle import support_bundle
 from cforge.commands.settings.version import version
 from cforge.commands.settings.whoami import whoami
-
-# First-Party
 from cforge.common.console import get_app
 
 # Get the main app singleton

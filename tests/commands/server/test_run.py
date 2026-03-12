@@ -12,6 +12,8 @@ from unittest.mock import MagicMock, patch
 
 # First-Party
 from cforge.commands.server.run import run
+
+# Local
 from tests.conftest import invoke_typer_command
 
 
@@ -502,6 +504,7 @@ class TestRunCommand:
 
     def test_run_health_check_connection_error_retry(self) -> None:
         """Test that health check retries on connection errors."""
+        # Third-Party
         import requests as real_requests
 
         with (
@@ -542,8 +545,8 @@ class TestRunCommand:
 
     def test_run_health_check_timeout(self) -> None:
         """Test that health check timeout exits with error."""
+        # Third-Party
         import requests as real_requests
-
         import typer
 
         with (

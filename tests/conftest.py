@@ -22,11 +22,10 @@ from types import SimpleNamespace
 from typing import Any, Callable, Generator, List, Union
 from unittest.mock import Mock, patch
 
+# Third-Party
 from fastapi.testclient import TestClient
 from mcp.server.fastmcp import FastMCP
 from pydantic import SecretStr
-
-# Third-Party
 import pytest
 from typer.models import OptionInfo
 from typer.testing import CliRunner
@@ -263,6 +262,7 @@ def mock_client() -> Generator[TestClient, None, None]:
             response = mock_client.get("/health")
             assert response.status_code == 200
     """
+    # First-Party
     from mcpgateway.main import app
 
     client = TestClient(app)

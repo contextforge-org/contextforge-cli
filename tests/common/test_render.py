@@ -15,6 +15,7 @@ class TestLineLimit:
 
     def test_line_limit_basic_truncation(self) -> None:
         """Test that LineLimit truncates content to max_lines."""
+        # Third-Party
         from rich.console import Console
         from rich.text import Text
 
@@ -40,6 +41,7 @@ class TestLineLimit:
 
     def test_line_limit_no_truncation_needed(self) -> None:
         """Test that LineLimit doesn't truncate when content is within limit."""
+        # Third-Party
         from rich.console import Console
         from rich.text import Text
 
@@ -60,6 +62,7 @@ class TestLineLimit:
 
     def test_line_limit_exact_match(self) -> None:
         """Test LineLimit when content exactly matches max_lines."""
+        # Third-Party
         from rich.console import Console
         from rich.text import Text
 
@@ -81,6 +84,7 @@ class TestLineLimit:
 
     def test_line_limit_zero_lines(self) -> None:
         """Test LineLimit with max_lines=0 shows only ellipsis."""
+        # Third-Party
         from rich.console import Console
         from rich.text import Text
 
@@ -99,6 +103,7 @@ class TestLineLimit:
 
     def test_line_limit_one_line(self) -> None:
         """Test LineLimit with max_lines=1."""
+        # Third-Party
         from rich.console import Console
         from rich.text import Text
 
@@ -118,6 +123,7 @@ class TestLineLimit:
 
     def test_line_limit_with_long_single_line(self) -> None:
         """Test LineLimit with a single long line that wraps."""
+        # Third-Party
         from rich.console import Console
         from rich.text import Text
 
@@ -138,6 +144,7 @@ class TestLineLimit:
 
     def test_line_limit_measurement_passthrough(self) -> None:
         """Test that LineLimit passes through measurement to wrapped renderable."""
+        # Third-Party
         from rich.console import Console
         from rich.text import Text
 
@@ -155,6 +162,7 @@ class TestLineLimit:
 
     def test_line_limit_with_empty_content(self) -> None:
         """Test LineLimit with empty content."""
+        # Third-Party
         from rich.console import Console
         from rich.text import Text
 
@@ -172,6 +180,7 @@ class TestLineLimit:
 
     def test_line_limit_preserves_styling(self) -> None:
         """Test that LineLimit preserves rich styling in truncated content."""
+        # Third-Party
         from rich.console import Console
         from rich.text import Text
 
@@ -258,6 +267,7 @@ class TestPrettyPrinting:
 
     def test_print_table_wraps_all_cells_with_line_limit(self) -> None:
         """Test that print_table wraps all cell values with LineLimit for truncation."""
+        # Standard
         from unittest.mock import patch
 
         # Create test data with various types
@@ -284,6 +294,7 @@ class TestPrettyPrinting:
 
     def test_print_table_with_custom_max_lines(self, mock_settings) -> None:
         """Test that print_table respects custom table_max_lines configuration."""
+        # Standard
         from unittest.mock import patch
 
         # Configure mock_settings with custom max_lines value
@@ -312,6 +323,7 @@ class TestPrettyPrinting:
 
     def test_print_table_with_disabled_line_limit(self, mock_settings) -> None:
         """Test that print_table skips LineLimit wrapping when table_max_lines is 0 or negative."""
+        # Standard
         from unittest.mock import patch
 
         # Configure mock_settings with disabled max_lines value (0)
