@@ -10,7 +10,7 @@ Tests for the main CLI application.
 # Third-Party
 from typer.testing import CliRunner
 
-# First-Party
+# Local
 from cforge.main import app
 
 

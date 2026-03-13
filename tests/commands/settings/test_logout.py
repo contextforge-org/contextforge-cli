@@ -9,13 +9,14 @@ Tests for the logout command.
 
 # Standard
 from pathlib import Path
-import tempfile
 from unittest.mock import patch
+
+import tempfile
 
 # Third-Party
 import pytest
 
-# First-Party
+# Local
 from cforge.commands.settings.login import login
 from cforge.commands.settings.logout import logout
 from cforge.common.errors import AuthenticationError
@@ -96,7 +97,7 @@ class TestLogoutWithProfiles:
         # Standard
         from datetime import datetime
 
-        # First-Party
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         # Create and save an active profile
@@ -135,7 +136,7 @@ class TestLogoutWithProfiles:
         # Standard
         from datetime import datetime
 
-        # First-Party
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         profile_id1 = "profile-1"

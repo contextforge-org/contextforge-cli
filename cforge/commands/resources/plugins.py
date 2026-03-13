@@ -19,7 +19,7 @@ from typing import Any, Dict, Optional
 # Third-Party
 import typer
 
-# First-Party
+# Local
 from cforge.common.console import get_console
 from cforge.common.errors import AuthenticationError, CaseInsensitiveEnum, CLIError, handle_exception
 from cforge.common.http import make_authenticated_request

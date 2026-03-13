@@ -8,14 +8,15 @@ CLI command: config-schema
 """
 
 # Standard
-import json
 from pathlib import Path
 from typing import Optional
+
+import json
 
 # Third-Party
 import typer
 
-# First-Party
+# Local
 from cforge.common.console import get_console
 from cforge.common.render import print_json
 from cforge.config import get_settings

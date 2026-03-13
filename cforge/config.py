@@ -10,9 +10,10 @@ CLI-specific superset of core settings
 # Standard
 from contextlib import contextmanager
 from functools import lru_cache
-import os
 from pathlib import Path
 from typing import Generator, Optional, Self
+
+import os
 
 # Third-Party
 from pydantic import model_validator

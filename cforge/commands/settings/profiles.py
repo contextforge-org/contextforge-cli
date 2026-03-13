@@ -9,16 +9,17 @@ CLI commands for profile management
 
 # Standard
 from datetime import datetime
-import json
 from pathlib import Path
+from typing import Optional
+
+import json
 import secrets
 import string
-from typing import Optional
 
 # Third-Party
 import typer
 
-# First-Party
+# Local
 from cforge.common.console import get_console
 from cforge.common.prompting import prompt_for_schema
 from cforge.common.render import print_json, print_table

@@ -6,7 +6,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
-# First-Party
+# Local
 from cforge.common.render import LineLimit, print_json, print_table
 
 

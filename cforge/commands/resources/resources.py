@@ -8,20 +8,23 @@ CLI command group: resources
 """
 
 # Standard
-import json
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+import json
 
 # Third-Party
 import typer
 
 # First-Party
+from mcpgateway.schemas import ResourceCreate, ResourceUpdate
+
+# Local
 from cforge.common.console import get_console
 from cforge.common.errors import handle_exception
 from cforge.common.http import make_authenticated_request
 from cforge.common.prompting import prompt_for_schema
 from cforge.common.render import print_json, print_table
-from mcpgateway.schemas import ResourceCreate, ResourceUpdate
 
 
 def resources_list(

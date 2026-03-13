@@ -9,10 +9,11 @@ Tests for profile management utilities.
 
 # Standard
 from datetime import datetime
-import json
 from pathlib import Path
 
-# First-Party
+import json
+
+# Local
 from cforge.profile_utils import (
     AuthProfile,
     DEFAULT_PROFILE_ID,

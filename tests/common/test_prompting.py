@@ -8,9 +8,10 @@ from unittest.mock import patch
 
 # Third-Party
 from pydantic import BaseModel, Field
+
 import pytest
 
-# First-Party
+# Local
 from cforge.common.errors import CLIError
 from cforge.common.prompting import (
     _build_prompt_text,

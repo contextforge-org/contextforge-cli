@@ -11,13 +11,14 @@ boundary between internal failures and surfaced command errors.
 
 # Standard
 from enum import Enum
-import json
 from typing import Any, Optional, Tuple
+
+import json
 
 # Third-Party
 import typer
 
-# First-Party
+# Local
 from cforge.common.console import get_console
 
 
@@ -59,7 +60,7 @@ def split_exception_details(exception: Exception) -> Tuple[str, Any]:
 
 def handle_exception(exception: Exception) -> None:
     """Handle an exception and print a friendly error message."""
-    # First-Party
+    # Local
     from cforge.common.render import print_json
 
     e_str, e_detail = split_exception_details(exception)

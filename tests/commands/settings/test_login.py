@@ -9,15 +9,16 @@ Tests for the login command.
 
 # Standard
 from pathlib import Path
-import tempfile
 from unittest.mock import Mock, patch
+
+import tempfile
 
 # Third-Party
 import pytest
 import requests
 import typer
 
-# First-Party
+# Local
 from cforge.commands.settings.login import login
 from cforge.common.errors import AuthenticationError
 from cforge.common.http import make_authenticated_request
@@ -147,7 +148,7 @@ class TestLoginWithProfiles:
         # Standard
         from datetime import datetime
 
-        # First-Party
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         mock_response = Mock()
@@ -186,7 +187,7 @@ class TestLoginWithProfiles:
         # Standard
         from datetime import datetime
 
-        # First-Party
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         profile_id1 = "profile-1"

@@ -14,7 +14,7 @@ import os
 import typer
 import uvicorn
 
-# First-Party
+# Local
 from cforge.config import get_settings, set_serve_settings
 
 # ---------------------------------------------------------------------------

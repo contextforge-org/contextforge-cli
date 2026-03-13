@@ -10,10 +10,8 @@ Tests for the run command.
 # Standard
 from unittest.mock import MagicMock, patch
 
-# First-Party
-from cforge.commands.server.run import run
-
 # Local
+from cforge.commands.server.run import run
 from tests.conftest import invoke_typer_command
 
 

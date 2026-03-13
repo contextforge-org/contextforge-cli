@@ -28,7 +28,7 @@ from __future__ import annotations
 # Third-Party
 import typer
 
-# First-Party
+# Local
 from cforge.commands.deploy.deploy import deploy
 from cforge.commands.metrics.metrics import metrics_get, metrics_reset
 from cforge.commands.resources.a2a import (

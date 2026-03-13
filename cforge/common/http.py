@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 # Third-Party
 import requests
 
-# First-Party
+# Local
 from cforge.common.errors import AuthenticationError, CLIError
 from cforge.config import get_settings
 from cforge.credential_store import load_profile_credentials

@@ -8,12 +8,13 @@ Tests for configuration management.
 """
 
 # Standard
-import os
 from pathlib import Path
-import tempfile
 from unittest import mock
 
-# First-Party
+import os
+import tempfile
+
+# Local
 from cforge.config import get_settings
 
 

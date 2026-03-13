@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for cforge.common.schema_validation."""
 
-# First-Party
+# Local
 from cforge.common.schema_validation import validate_instance, validate_instance_against_subschema, validate_schema
 
 

@@ -10,7 +10,7 @@ Tests for the whoami command.
 # Standard
 from unittest.mock import patch
 
-# First-Party
+# Local
 from cforge.commands.settings.whoami import whoami
 
 
@@ -83,7 +83,7 @@ class TestWhoamiWithProfiles:
         # Standard
         from datetime import datetime
 
-        # First-Party
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         # Create and save an active profile
@@ -131,7 +131,7 @@ class TestWhoamiWithProfiles:
         # Standard
         from datetime import datetime
 
-        # First-Party
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileMetadata, ProfileStore, save_profile_store
 
         # Create profile with metadata
@@ -174,7 +174,7 @@ class TestWhoamiWithProfiles:
         # Standard
         from datetime import datetime
 
-        # First-Party
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         # Create and save an active profile

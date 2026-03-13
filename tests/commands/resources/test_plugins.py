@@ -11,12 +11,10 @@ Tests for the plugins commands.
 import pytest
 import typer
 
-# First-Party
+# Local
 from cforge.commands.resources.plugins import _parse_plugin_mode, PluginMode, plugins_get, plugins_list, plugins_stats
 from cforge.common.errors import AuthenticationError, CLIError
 from cforge.main import app
-
-# Local
 from tests.conftest import invoke_typer_command, patch_functions
 
 
