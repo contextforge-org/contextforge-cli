@@ -736,7 +736,6 @@ class TestRunCommand:
             mock_atexit.register.assert_called_once()
             mock_process.assert_called_once()
 
-
     def test_run_registration_with_streamable_http_only(self) -> None:
         """Test that registration uses /mcp endpoint when only streamable HTTP is enabled."""
         with (
