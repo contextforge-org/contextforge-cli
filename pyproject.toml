@@ -285,12 +285,10 @@ known_local_folder         = ["tests", "scripts", "cforge"]  # treat these folde
 ###############################################################################
 # Style niceties
 ###############################################################################
-# force_alphabetical_sort_within_sections = true         # always alphabetise names inside each block
 case_sensitive             = true         # case sensitive sorting
 order_by_type              = false        # don't group imports by "type vs. straight name"
 balanced_wrapping          = true         # spread wrapped imports evenly between lines
 lines_between_sections     = 1            # exactly one blank line between the five groups
-# lines_between_types        = 1            # one blank line between 'import X' and 'from X import ...'
 no_lines_before            = ["LOCALFOLDER"]  # suppress blank line *before* the LOCALFOLDER block
 ensure_newline_before_comments = true     # newline before any inline # comment after an import
 
