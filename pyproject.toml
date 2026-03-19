@@ -222,7 +222,7 @@ from-first                 = true         # place all "from ... import ..." befo
 ###############################################################################
 # What belongs where
 ###############################################################################
-known-first-party          = ["mcpgateway"]    # treat "cforge" and "mcpgateway" as FIRSTPARTY
+known-first-party          = ["mcpgateway"]    # treat "mcpgateway" as FIRSTPARTY
 known-local-folder         = ["tests", "scripts","cforge"]  # treat these folders as LOCALFOLDER
 known-third-party          = ["alembic"] # treat "alembic" as THIRDPARTY
 # src-paths                = ["src/cforge"]    # uncomment only if package moves under src/
@@ -278,18 +278,19 @@ import_heading_localfolder = "Local"        # header for ad-hoc scripts / tests
 ###############################################################################
 # What belongs where
 ###############################################################################
-known_first_party          = ["mcpgateway"]    # treat "mcpgateway.*" as FIRSTPARTY
+known_first_party          = ["mcpgateway"]    # treat "mcpgateway" as FIRSTPARTY
 known_local_folder         = ["tests", "scripts", "cforge"]  # treat these folders as LOCALFOLDER
 # src_paths                  = ["src/cforge"]    # uncomment only if package moves under src/
 
 ###############################################################################
 # Style niceties
 ###############################################################################
-force_alphabetical_sort_within_sections = true         # always alphabetise names inside each block
+# force_alphabetical_sort_within_sections = true         # always alphabetise names inside each block
+case_sensitive             = true         # case sensitive sorting
 order_by_type              = false        # don't group imports by "type vs. straight name"
 balanced_wrapping          = true         # spread wrapped imports evenly between lines
 lines_between_sections     = 1            # exactly one blank line between the five groups
-lines_between_types        = 1            # one blank line between 'import X' and 'from X import ...'
+# lines_between_types        = 1            # one blank line between 'import X' and 'from X import ...'
 no_lines_before            = ["LOCALFOLDER"]  # suppress blank line *before* the LOCALFOLDER block
 ensure_newline_before_comments = true     # newline before any inline # comment after an import
 

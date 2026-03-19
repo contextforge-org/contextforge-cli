@@ -12,15 +12,14 @@ from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Generator, Optional, Self
-
 import os
 
 # Third-Party
 from pydantic import model_validator
 
 # First-Party
-from mcpgateway.config import get_settings as cf_get_settings
 from mcpgateway.config import Settings
+from mcpgateway.config import get_settings as cf_get_settings
 
 HOME_DIR_NAME = ".contextforge"
 DEFAULT_HOME = Path.home() / HOME_DIR_NAME

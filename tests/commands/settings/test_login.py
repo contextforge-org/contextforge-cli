@@ -10,7 +10,6 @@ Tests for the login command.
 # Standard
 from pathlib import Path
 from unittest.mock import Mock, patch
-
 import tempfile
 
 # Third-Party

@@ -10,7 +10,6 @@ CLI command group: virtual-servers
 # Standard
 from pathlib import Path
 from typing import Optional
-
 import json
 
 # Third-Party

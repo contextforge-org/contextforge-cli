@@ -10,7 +10,6 @@ Tests for the tools commands.
 # Standard
 from pathlib import Path
 from unittest.mock import patch
-
 import json
 import tempfile
 

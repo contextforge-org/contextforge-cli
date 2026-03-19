@@ -11,7 +11,6 @@ CLI command: export
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
-
 import json
 
 # Third-Party

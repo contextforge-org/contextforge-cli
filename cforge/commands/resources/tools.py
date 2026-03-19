@@ -10,7 +10,6 @@ CLI command group: tools
 # Standard
 from pathlib import Path
 from typing import Any, Dict, Optional
-
 import json
 
 # Third-Party

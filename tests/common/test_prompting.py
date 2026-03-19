@@ -8,15 +8,14 @@ from unittest.mock import patch
 
 # Third-Party
 from pydantic import BaseModel, Field
-
 import pytest
 
 # Local
 from cforge.common.errors import CLIError
 from cforge.common.prompting import (
+    _INT_SENTINEL_DEFAULT,
     _build_prompt_text,
     _infer_schema_type,
-    _INT_SENTINEL_DEFAULT,
     _resolve_effective_schema,
     _resolve_ref_schema,
     _resolve_schema_type,

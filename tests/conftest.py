@@ -13,7 +13,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Generator, List, Union
 from unittest.mock import Mock, patch
-
 import inspect
 import logging
 import os
@@ -29,7 +28,6 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import SecretStr
 from typer.models import OptionInfo
 from typer.testing import CliRunner
-
 import pytest
 import urllib3
 import uvicorn

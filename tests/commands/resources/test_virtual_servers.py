@@ -10,7 +10,6 @@ Tests for the virtual-servers commands.
 # Standard
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
 import json
 import tempfile
 

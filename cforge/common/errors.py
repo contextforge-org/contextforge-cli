@@ -12,7 +12,6 @@ boundary between internal failures and surfaced command errors.
 # Standard
 from enum import Enum
 from typing import Any, Optional, Tuple
-
 import json
 
 # Third-Party

@@ -10,7 +10,6 @@ CLI command group: a2a
 # Standard
 from pathlib import Path
 from typing import Optional
-
 import json
 
 # Third-Party

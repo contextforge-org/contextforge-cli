@@ -10,20 +10,19 @@ Tests for profile management utilities.
 # Standard
 from datetime import datetime
 from pathlib import Path
-
 import json
 
 # Local
 from cforge.profile_utils import (
     AuthProfile,
     DEFAULT_PROFILE_ID,
+    ProfileMetadata,
+    ProfileStore,
     get_active_profile,
     get_all_profiles,
     get_profile,
     get_profile_store_path,
     load_profile_store,
-    ProfileMetadata,
-    ProfileStore,
     save_profile_store,
     set_active_profile,
 )

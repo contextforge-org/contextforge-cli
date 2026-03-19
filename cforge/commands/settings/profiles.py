@@ -11,7 +11,6 @@ CLI commands for profile management
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-
 import json
 import secrets
 import string
@@ -26,11 +25,11 @@ from cforge.common.render import print_json, print_table
 from cforge.config import get_settings
 from cforge.profile_utils import (
     AuthProfile,
+    ProfileStore,
     get_active_profile,
     get_all_profiles,
     get_profile,
     load_profile_store,
-    ProfileStore,
     save_profile_store,
     set_active_profile,
 )

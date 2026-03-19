@@ -4,7 +4,6 @@
 # Standard
 from pathlib import Path
 from unittest.mock import Mock, patch
-
 import stat
 import tempfile
 

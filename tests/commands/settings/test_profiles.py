@@ -11,7 +11,6 @@ Tests for profile management CLI commands.
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
-
 import json
 import tempfile
 
@@ -29,9 +28,9 @@ from cforge.commands.settings.profiles import (
 from cforge.profile_utils import (
     AuthProfile,
     DEFAULT_PROFILE_ID,
-    load_profile_store,
     ProfileMetadata,
     ProfileStore,
+    load_profile_store,
     save_profile_store,
 )
 

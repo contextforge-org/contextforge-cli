@@ -11,14 +11,12 @@ commands that need structured request payloads.
 """
 
 # Standard
-from typing import Annotated, Any, Callable, Dict, get_args, get_origin, get_type_hints, List, Optional, Tuple, Union
-
+from typing import Annotated, Any, Callable, Dict, List, Optional, Tuple, Union, get_args, get_origin, get_type_hints
 import json
 
 # Third-Party
 from pydantic import BaseModel
 from rich.console import Console
-
 import typer
 
 # Local

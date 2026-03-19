@@ -10,7 +10,6 @@ Tests for the logout command.
 # Standard
 from pathlib import Path
 from unittest.mock import patch
-
 import tempfile
 
 # Third-Party

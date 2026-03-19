@@ -10,7 +10,6 @@ CLI command: config-schema
 # Standard
 from pathlib import Path
 from typing import Optional
-
 import json
 
 # Third-Party

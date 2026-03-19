@@ -9,7 +9,6 @@ Tests for the serve command.
 
 # Standard
 from unittest.mock import patch
-
 import threading
 import time
 

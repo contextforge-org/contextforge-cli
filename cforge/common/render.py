@@ -11,11 +11,10 @@ data retrieval while sharing a consistent terminal presentation.
 
 # Standard
 from typing import Any, Dict, List, Optional
-
 import json
 
 # Third-Party
-from rich.console import Console, ConsoleOptions, RenderableType, RenderResult
+from rich.console import Console, ConsoleOptions, RenderResult, RenderableType
 from rich.measure import Measurement
 from rich.panel import Panel
 from rich.segment import Segment

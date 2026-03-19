@@ -12,11 +12,10 @@ Reads profile data from the Desktop app's electron-store files.
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
-
 import json
 
 # Third-Party
-from pydantic import BaseModel, Field, field_validator, ValidationInfo
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 # Local
 from cforge.config import get_settings
