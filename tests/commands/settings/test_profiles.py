@@ -18,7 +18,7 @@ import tempfile
 import pytest
 import typer
 
-# First-Party
+# Local
 from cforge.commands.settings.profiles import (
     profiles_create,
     profiles_get,
@@ -27,11 +27,11 @@ from cforge.commands.settings.profiles import (
 )
 from cforge.profile_utils import (
     AuthProfile,
+    DEFAULT_PROFILE_ID,
     ProfileMetadata,
     ProfileStore,
-    save_profile_store,
     load_profile_store,
-    DEFAULT_PROFILE_ID,
+    save_profile_store,
 )
 
 
@@ -103,6 +103,7 @@ class TestProfilesList:
 
     def test_profiles_list_with_active_profile(self, mock_console, mock_settings) -> None:
         """Test listing profiles when there is an active profile."""
+        # Standard
         from datetime import datetime
 
         # Create test profiles with one active
@@ -140,6 +141,7 @@ class TestProfilesList:
 
     def test_profiles_list_without_active_profile(self, mock_console, mock_settings) -> None:
         """Test listing profiles when there is not an active profile."""
+        # Standard
         from datetime import datetime
 
         # Create test profiles with one active
@@ -623,6 +625,7 @@ class TestProfilesCreate:
 
     def test_profiles_create_with_existing_store(self, mock_console, mock_settings) -> None:
         """Test creating a profile when a profile store already exists."""
+        # Local
         from cforge.profile_utils import load_profile_store
 
         # Create an existing profile store

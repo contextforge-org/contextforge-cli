@@ -8,17 +8,17 @@ Tests for the prompts commands.
 """
 
 # Standard
-import json
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
+import json
+import tempfile
 
 # Third-Party
 import click
 import pytest
 import typer
 
-# First-Party
+# Local
 from cforge.commands.resources.prompts import (
     prompts_create,
     prompts_delete,

@@ -14,7 +14,7 @@ from typing import Optional
 # Third-Party
 import typer
 
-# First-Party
+# Local
 from cforge.common.console import get_console
 
 

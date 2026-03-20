@@ -8,18 +8,18 @@ Tests for profile management utilities.
 """
 
 # Standard
-import json
 from datetime import datetime
 from pathlib import Path
+import json
 
-# First-Party
+# Local
 from cforge.profile_utils import (
     AuthProfile,
     DEFAULT_PROFILE_ID,
     ProfileMetadata,
     ProfileStore,
-    get_all_profiles,
     get_active_profile,
+    get_all_profiles,
     get_profile,
     get_profile_store_path,
     load_profile_store,
@@ -376,6 +376,7 @@ class TestSaveProfileStore:
 
         # Ensure directory doesn't exist
         if store_path.parent.exists():
+            # Standard
             import shutil
 
             shutil.rmtree(store_path.parent)

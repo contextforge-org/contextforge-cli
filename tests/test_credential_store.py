@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-# First-Party
+# Local
 from cforge.credential_store import (
     decrypt_credential_data,
     get_credential_store_path,
@@ -73,6 +73,7 @@ class TestCredentialDecryption:
 
     def _encrypt_data(self, data: str, encryption_key: str) -> bytes:
         """Helper to encrypt data using the same format as electron-store/conf."""
+        # Standard
         import os
 
         # Generate random IV
@@ -226,6 +227,7 @@ class TestLoadProfileCredentials:
 
     def _encrypt_data(self, data: str, encryption_key: str) -> bytes:
         """Helper to encrypt data using the same format as electron-store/conf."""
+        # Standard
         import os
 
         # Generate random IV

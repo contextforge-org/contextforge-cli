@@ -8,9 +8,11 @@ CLI command: version
 """
 
 # First-Party
+from mcpgateway import __version__
+
+# Local
 from cforge.common.console import get_console
 from cforge.common.http import make_authenticated_request
-from mcpgateway import __version__
 
 
 def version() -> None:

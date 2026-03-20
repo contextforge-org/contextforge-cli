@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for cforge.common.errors."""
 
-# First-Party
+# Local
 from cforge.common.errors import AuthenticationError, CLIError
 
 

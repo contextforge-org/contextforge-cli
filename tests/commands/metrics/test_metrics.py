@@ -14,7 +14,7 @@ from unittest.mock import patch
 import pytest
 import typer
 
-# First-Party
+# Local
 from cforge.commands.metrics.metrics import metrics_get, metrics_reset
 
 

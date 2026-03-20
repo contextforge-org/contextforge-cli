@@ -8,17 +8,17 @@ Tests for the resources commands.
 """
 
 # Standard
-import json
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
+import json
+import tempfile
 
 # Third-Party
 import click
 import pytest
 import typer
 
-# First-Party
+# Local
 from cforge.commands.resources.resources import (
     resources_create,
     resources_delete,

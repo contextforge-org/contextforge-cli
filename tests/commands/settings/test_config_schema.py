@@ -8,12 +8,12 @@ Tests for the config-schema command.
 """
 
 # Standard
-import json
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
+import json
+import tempfile
 
-# First-Party
+# Local
 from cforge.commands.settings.config_schema import config_schema
 
 

@@ -9,27 +9,26 @@ Pytest configuration and shared fixtures for Context Forge CLI tests.
 
 # Standard
 from contextlib import contextmanager
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Callable, Generator, List, Union
+from unittest.mock import Mock, patch
 import inspect
 import logging
 import os
-from pathlib import Path
 import socket
 import sys
 import tempfile
 import threading
 import time
-from types import SimpleNamespace
-from typing import Any, Callable, Generator, List, Union
-from unittest.mock import Mock, patch
 
+# Third-Party
 from fastapi.testclient import TestClient
 from mcp.server.fastmcp import FastMCP
 from pydantic import SecretStr
-
-# Third-Party
-import pytest
 from typer.models import OptionInfo
 from typer.testing import CliRunner
+import pytest
 import urllib3
 import uvicorn
 
@@ -39,7 +38,7 @@ working_dir = tempfile.TemporaryDirectory()
 os.environ["DATABASE_URL"] = f"sqlite:////{working_dir.__enter__()}/mcp.db"
 
 
-# First-Party
+# Local
 from cforge.config import CLISettings, get_settings  # noqa: E402
 
 # Suppress urllib3 retry warnings during tests
@@ -263,6 +262,7 @@ def mock_client() -> Generator[TestClient, None, None]:
             response = mock_client.get("/health")
             assert response.status_code == 200
     """
+    # First-Party
     from mcpgateway.main import app
 
     client = TestClient(app)

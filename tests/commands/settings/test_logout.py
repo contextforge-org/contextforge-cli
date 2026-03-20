@@ -9,13 +9,13 @@ Tests for the logout command.
 
 # Standard
 from pathlib import Path
-import tempfile
 from unittest.mock import patch
+import tempfile
 
 # Third-Party
 import pytest
 
-# First-Party
+# Local
 from cforge.commands.settings.login import login
 from cforge.commands.settings.logout import logout
 from cforge.common.errors import AuthenticationError
@@ -93,8 +93,10 @@ class TestLogoutWithProfiles:
 
     def test_logout_removes_profile_specific_token(self, mock_console, mock_settings) -> None:
         """Test that logout removes profile-specific token file."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         # Create and save an active profile
@@ -130,8 +132,10 @@ class TestLogoutWithProfiles:
 
     def test_logout_only_removes_active_profile_token(self, mock_console, mock_settings) -> None:
         """Test that logout only removes the active profile's token, not others."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         profile_id1 = "profile-1"

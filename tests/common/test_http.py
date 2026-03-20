@@ -3,15 +3,15 @@
 
 # Standard
 from pathlib import Path
+from unittest.mock import Mock, patch
 import stat
 import tempfile
-from unittest.mock import Mock, patch
 
 # Third-Party
 import pytest
 import requests
 
-# First-Party
+# Local
 from cforge.common.errors import AuthenticationError, CLIError
 from cforge.common.http import get_auth_token, get_token_file, load_token, make_authenticated_request, save_token
 from tests.conftest import mock_client_login
@@ -29,8 +29,10 @@ class TestTokenManagement:
 
     def test_get_token_file_with_active_profile(self, mock_settings) -> None:
         """Test getting the token file path uses active profile when available."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         # Create and save an active profile
@@ -66,8 +68,10 @@ class TestTokenManagement:
 
     def test_save_and_load_token_with_active_profile(self, mock_settings) -> None:
         """Test saving and loading a token with an active profile."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         test_token = "profile_token_456"
@@ -100,8 +104,10 @@ class TestTokenManagement:
 
     def test_save_token_different_profiles(self, mock_settings) -> None:
         """Test that different profiles have separate token files."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         token1 = "token_for_profile_1"
@@ -162,8 +168,10 @@ class TestTokenManagement:
 
     def test_load_token_nonexistent_profile(self, mock_settings) -> None:
         """Test loading a token for a profile that doesn't have a token file."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
         profile_id = "nonexistent-profile"
@@ -194,8 +202,10 @@ class TestBaseUrl:
 
     def test_get_base_url_with_active_profile(self, mock_settings) -> None:
         """Test get_base_url returns profile's API URL when active profile exists."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.common.http import get_base_url
         from cforge.profile_utils import AuthProfile, ProfileStore, save_profile_store
 
@@ -220,6 +230,7 @@ class TestBaseUrl:
 
     def test_get_base_url_without_active_profile(self, mock_settings) -> None:
         """Test get_base_url returns default URL when no active profile."""
+        # Local
         from cforge.common.http import get_base_url
 
         # No profile saved, should use settings
@@ -261,6 +272,7 @@ class TestAutoLogin:
 
     def test_attempt_auto_login_no_profile(self, mock_settings):
         """Test auto-login when no profile is active."""
+        # Local
         from cforge.common.http import attempt_auto_login
 
         token = attempt_auto_login()
@@ -268,8 +280,10 @@ class TestAutoLogin:
 
     def test_attempt_auto_login_no_credentials(self, mock_settings):
         """Test auto-login when credentials are not available."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.common.http import attempt_auto_login
         from cforge.profile_utils import AuthProfile
 
@@ -289,8 +303,10 @@ class TestAutoLogin:
 
     def test_attempt_auto_login_missing_email(self, mock_settings):
         """Test auto-login when email is missing from credentials."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.common.http import attempt_auto_login
         from cforge.profile_utils import AuthProfile
 
@@ -310,8 +326,10 @@ class TestAutoLogin:
 
     def test_attempt_auto_login_missing_password(self, mock_settings):
         """Test auto-login when password is missing from credentials."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.common.http import attempt_auto_login
         from cforge.profile_utils import AuthProfile
 
@@ -332,8 +350,10 @@ class TestAutoLogin:
     @patch("cforge.common.http.requests.post")
     def test_attempt_auto_login_success(self, mock_post, mock_settings):
         """Test successful auto-login."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.common.http import attempt_auto_login, load_token
         from cforge.profile_utils import AuthProfile
 
@@ -364,8 +384,10 @@ class TestAutoLogin:
     @patch("cforge.common.http.requests.post")
     def test_attempt_auto_login_failed_login(self, mock_post, mock_settings):
         """Test auto-login when login fails."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.common.http import attempt_auto_login
         from cforge.profile_utils import AuthProfile
 
@@ -391,8 +413,10 @@ class TestAutoLogin:
     @patch("cforge.common.http.requests.post")
     def test_attempt_auto_login_no_token_in_response(self, mock_post, mock_settings):
         """Test auto-login when response doesn't contain token."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.common.http import attempt_auto_login
         from cforge.profile_utils import AuthProfile
 
@@ -419,8 +443,10 @@ class TestAutoLogin:
     @patch("cforge.common.http.requests.post")
     def test_attempt_auto_login_request_exception(self, mock_post, mock_settings):
         """Test auto-login when request raises exception."""
+        # Standard
         from datetime import datetime
 
+        # Local
         from cforge.common.http import attempt_auto_login
         from cforge.profile_utils import AuthProfile
 
@@ -443,6 +469,7 @@ class TestAutoLogin:
 
     def test_get_auth_token_with_auto_login(self, mock_settings):
         """Test that get_auth_token attempts auto-login when no token is available."""
+        # Local
         from cforge.common.http import get_auth_token
 
         # Mock no env token and no file token, but successful auto-login

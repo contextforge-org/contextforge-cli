@@ -9,16 +9,19 @@ It keeps formatting decisions in one place so resource commands can focus on
 data retrieval while sharing a consistent terminal presentation.
 """
 
-import json
+# Standard
 from typing import Any, Dict, List, Optional
+import json
 
-from rich.console import Console, ConsoleOptions, RenderableType, RenderResult
+# Third-Party
+from rich.console import Console, ConsoleOptions, RenderResult, RenderableType
 from rich.measure import Measurement
 from rich.panel import Panel
 from rich.segment import Segment
 from rich.syntax import Syntax
 from rich.table import Table
 
+# Local
 from cforge.common.console import get_console
 from cforge.config import get_settings
 

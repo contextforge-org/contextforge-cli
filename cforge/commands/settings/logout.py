@@ -7,7 +7,7 @@ Authors: Gabe Goodhart
 CLI command: logout
 """
 
-# First-Party
+# Local
 from cforge.common.console import get_console
 from cforge.common.http import get_token_file
 

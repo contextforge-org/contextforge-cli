@@ -8,16 +8,16 @@ Tests for the import command.
 """
 
 # Standard
-import json
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
+import json
+import tempfile
 
 # Third-Party
 import pytest
 import typer
 
-# First-Party
+# Local
 from cforge.commands.settings.import_cmd import import_cmd
 
 

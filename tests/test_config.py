@@ -13,7 +13,7 @@ from unittest import mock
 import os
 import tempfile
 
-# First-Party
+# Local
 from cforge.config import get_settings
 
 

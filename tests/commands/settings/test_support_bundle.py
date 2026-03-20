@@ -8,15 +8,15 @@ Tests for the support-bundle command.
 """
 
 # Standard
-import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
+import tempfile
 
 # Third-Party
 import pytest
 import typer
 
-# First-Party
+# Local
 from cforge.commands.settings.support_bundle import support_bundle
 
 

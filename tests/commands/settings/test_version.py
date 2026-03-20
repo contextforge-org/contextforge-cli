@@ -8,8 +8,10 @@ Tests for the version command.
 """
 
 # First-Party
-from cforge.commands.settings.version import version
 from mcpgateway import __version__
+
+# Local
+from cforge.commands.settings.version import version
 
 
 class TestVersionCommand:

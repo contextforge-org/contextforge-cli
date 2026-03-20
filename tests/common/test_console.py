@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for cforge.common.console."""
 
-# First-Party
+# Local
 from cforge.common.console import get_app, get_console
 
 

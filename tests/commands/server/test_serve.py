@@ -15,7 +15,7 @@ import time
 # Third-Party
 import requests
 
-# First-Party
+# Local
 from cforge.commands.server.serve import serve
 from tests.conftest import get_open_port, invoke_typer_command
 

@@ -8,17 +8,17 @@ Tests for the mcp-servers commands.
 """
 
 # Standard
-import json
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
+import json
+import tempfile
 
 # Third-Party
 import click
 import pytest
 import typer
 
-# First-Party
+# Local
 from cforge.commands.resources.mcp_servers import (
     mcp_servers_create,
     mcp_servers_delete,
