@@ -174,8 +174,8 @@ def run(
     # Register if requested
     if register:
 
-        # Default to SSE if no protocol specified
-        is_sse = expose_sse or expose_streamable_http or (not expose_sse and not expose_streamable_http)
+        # Use streamable HTTP only when it's explicitly enabled without SSE
+        is_sse = expose_sse or not expose_streamable_http
 
         registered_server_id: Optional[str] = None
         try:

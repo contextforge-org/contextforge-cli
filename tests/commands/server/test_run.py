@@ -736,3 +736,96 @@ class TestRunCommand:
             # Verify cleanup was registered
             mock_atexit.register.assert_called_once()
             mock_process.assert_called_once()
+
+    def test_run_registration_with_streamable_http_only(self) -> None:
+        """Test that registration uses /mcp endpoint when only streamable HTTP is enabled."""
+        with (
+            patch("mcpgateway.translate.main") as mock_translate,
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+        ):
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "streamable-http-server-id"}
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9005, expose_streamable_http=True, register=True)
+
+            # Verify registration was attempted
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+            json_data = call_args[1]["json_data"]
+
+            # Verify correct endpoint and transport type for streamable HTTP
+            assert json_data["url"] == "http://127.0.0.1:9005/mcp"
+            assert json_data["transport"] == "STREAMABLEHTTP"
+
+            # Verify translate_main was called via Process
+            mock_process.assert_called_once()
+            proc_call_args = mock_process.call_args[1]
+            assert proc_call_args.get("target") is mock_translate
+
+    def test_run_registration_with_both_protocols_defaults_to_sse(self) -> None:
+        """Test that registration defaults to SSE when both protocols are enabled."""
+        with (
+            patch("mcpgateway.translate.main") as mock_translate,
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+        ):
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "both-protocols-server-id"}
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, expose_sse=True, expose_streamable_http=True, register=True)
+
+            # Verify registration was attempted
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+            json_data = call_args[1]["json_data"]
+
+            # Verify SSE is used when both protocols are enabled (SSE takes priority)
+            assert json_data["url"] == "http://127.0.0.1:9000/sse"
+            assert json_data["transport"] == "SSE"
+
+            # Verify translate_main was called via Process
+            mock_process.assert_called_once()
+            proc_call_args = mock_process.call_args[1]
+            assert proc_call_args.get("target") is mock_translate
+
+    def test_run_registration_without_protocol_flags_defaults_to_sse(self) -> None:
+        """Test that registration defaults to SSE when no protocol flags are specified."""
+        with (
+            patch("mcpgateway.translate.main") as mock_translate,
+            patch("multiprocessing.Process") as mock_process,
+            patch("cforge.commands.server.run.requests") as mock_requests,
+            patch("cforge.commands.server.run.make_authenticated_request") as mock_request,
+        ):
+            # Mock returning a 200 on health
+            mock_get_res = MagicMock()
+            mock_get_res.status_code = 200
+            mock_requests.get = MagicMock(return_value=mock_get_res)
+
+            mock_request.return_value = {"id": "default-server-id"}
+
+            invoke_typer_command(run, stdio="uvx mcp-server-git", port=9000, register=True)
+
+            # Verify registration was attempted
+            mock_request.assert_called_once()
+            call_args = mock_request.call_args
+            json_data = call_args[1]["json_data"]
+
+            # Verify SSE is used by default when no protocol flags are specified
+            assert json_data["url"] == "http://127.0.0.1:9000/sse"
+            assert json_data["transport"] == "SSE"
+
+            # Verify translate_main was called via Process
+            mock_process.assert_called_once()
+            proc_call_args = mock_process.call_args[1]
+            assert proc_call_args.get("target") is mock_translate
